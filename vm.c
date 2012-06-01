@@ -11,6 +11,14 @@ extern char data[];  // defined by kernel.ld
 pde_t *kpgdir;  // for use in scheduler()
 struct segdesc gdt[NSEGS];
 
+/* A&T replacement algorithm */
+enum alg {RANDOM, FIFO, NFU, NONE};
+
+/* here will be a macro */
+static enum alg replacement_alg = RANDOM;
+
+
+
 // Set up CPU's kernel segment descriptors.
 // Run once on entry on each CPU.
 void
@@ -33,11 +41,15 @@ seginit(void)
 
   lgdt(c->gdt, sizeof(c->gdt));
   loadgs(SEG_KCPU << 3);
-  
+
   // Initialize cpu-local storage.
   cpu = c;
   proc = 0;
 }
+/* A&T forward decl */
+int swap_in(pde_t *pgtab, uint pd_idx, pde_t *pde);
+uint page_to_swap(pde_t *pgdir, enum alg replacement_alg);
+int swap_out(uint pd_idx, pde_t *pgdir);
 
 // Return the address of the PTE in page table pgdir
 // that corresponds to virtual address va.  If alloc!=0,
@@ -47,17 +59,32 @@ walkpgdir(pde_t *pgdir, const void *va, int alloc)
 {
   pde_t *pde;
   pte_t *pgtab;
+  uint page;
 
   pde = &pgdir[PDX(va)];
   if(*pde & PTE_P){
     pgtab = (pte_t*)p2v(PTE_ADDR(*pde));
+  } else if (*pde & PTE_PG) {	/* A&T */
+      if ((pgtab = (pte_t*)kalloc()) == 0)
+          return 0;		/* can't kalloc */
+      /* A&T read to pgtab from file, and update the new
+       * physical address (PPN) in the pgdir. Set
+       * the PTE_P bit, and clear the PTE_PG bit.
+       * don't forget to clear the corresponding place in
+       * pagefile_addr array */
+      swap_in(pgtab, PDX(va), pde);
+
+      page = page_to_swap(pgdir, replacement_alg);
+      swap_out(page, pgdir);
+
+      /* A&T end swapping */
   } else {
     if(!alloc || (pgtab = (pte_t*)kalloc()) == 0)
       return 0;
     // Make sure all those PTE_P bits are zero.
     memset(pgtab, 0, PGSIZE);
     // The permissions here are overly generous, but they can
-    // be further restricted by the permissions in the page table 
+    // be further restricted by the permissions in the page table
     // entries, if necessary.
     *pde = v2p(pgtab) | PTE_P | PTE_W | PTE_U;
   }
@@ -72,7 +99,7 @@ mappages(pde_t *pgdir, void *va, uint size, uint pa, int perm)
 {
   char *a, *last;
   pte_t *pte;
-  
+
   a = (char*)PGROUNDDOWN((uint)va);
   last = (char*)PGROUNDDOWN(((uint)va) + size - 1);
   for(;;){
@@ -94,7 +121,7 @@ mappages(pde_t *pgdir, void *va, uint size, uint pa, int perm)
 // current process's page table during system calls and interrupts;
 // page protection bits prevent user code from using the kernel's
 // mappings.
-// 
+//
 // setupkvm() and exec() set up every page table like this:
 //
 //   0..KERNBASE: user memory (text+data+stack+heap), mapped to
@@ -102,7 +129,7 @@ mappages(pde_t *pgdir, void *va, uint size, uint pa, int perm)
 //   KERNBASE..KERNBASE+EXTMEM: mapped to 0..EXTMEM (for I/O space)
 //   KERNBASE+EXTMEM..data: mapped to EXTMEM..V2P(data)
 //                for the kernel's instructions and r/o data
-//   data..KERNBASE+PHYSTOP: mapped to V2P(data)..PHYSTOP, 
+//   data..KERNBASE+PHYSTOP: mapped to V2P(data)..PHYSTOP,
 //                                  rw data + free physical memory
 //   0xfe000000..0: mapped direct (devices such as ioapic)
 //
@@ -137,7 +164,7 @@ setupkvm()
   if (p2v(PHYSTOP) > (void*)DEVSPACE)
     panic("PHYSTOP too high");
   for(k = kmap; k < &kmap[NELEM(kmap)]; k++)
-    if(mappages(pgdir, k->virt, k->phys_end - k->phys_start, 
+    if(mappages(pgdir, k->virt, k->phys_end - k->phys_start,
                 (uint)k->phys_start, k->perm) < 0)
       return 0;
   return pgdir;
@@ -182,7 +209,7 @@ void
 inituvm(pde_t *pgdir, char *init, uint sz)
 {
   char *mem;
-  
+
   if(sz >= PGSIZE)
     panic("inituvm: more than a page");
   mem = kalloc();
@@ -374,4 +401,58 @@ copyout(pde_t *pgdir, uint va, void *p, uint len)
     va = va0 + PGSIZE;
   }
   return 0;
+}
+
+/* A&T read to pgtab from file, and update the new
+ * physical address (PPN) in the pgdir. Set
+ * the PTE_P bit, and clear the PTE_PG bit.
+ * don't forget to clear the corresponding place in
+ * pagefile_addr array */
+int swap_in(pde_t *pgtab, uint pd_idx, pde_t *pde) {
+    uint *pagefile_addr;
+    int i;
+    struct file *f;
+
+    pagefile_addr = get_pagefile_addr();
+    for (i = 0; i < MAX_SWAP_PAGES; i++) {
+        if (pagefile_addr[i] == pd_idx) {
+            pagefile_addr[i] = 0;
+            break;
+        }
+    }
+    if (i == MAX_SWAP_PAGES)
+        return -1;
+
+    f = get_pagefile();
+    set_f_offset(f, ((uint)i * PGSIZE));
+    /* read from file to pgtab */
+    fileread(f, (char *) pgtab, PGSIZE);
+    *pde &= 0xFFF; /* A&T zero the leftmost 20 bits */
+    *pde |= v2p(pgtab);		/* update pgtab addr */
+    *pde &= (~PTE_PG);		/* clear PTE_PG bit */
+    *pde |= PTE_P;		/* set PTE_P bit */
+    return 0;
+}
+
+uint page_to_swap(pde_t *pgdir, enum alg replacement_alg) {
+    return 0;
+}
+/* write the page table to the pagefile, clear PTE_P
+ * and set PTE_PG */
+int swap_out(uint pd_idx, pde_t *pgdir) {
+    uint *pagefile_addr;
+    int i;
+    /* struct file *f; */
+
+    pagefile_addr = get_pagefile_addr();
+    for (i = 0; i < MAX_SWAP_PAGES; i++) {
+        if (pagefile_addr[i] == 0) {
+            pagefile_addr[i] = pd_idx;;
+            break;
+        }
+    }
+    /* got until here */
+    /* f = get_pagefile(); */
+
+    return 99999;
 }

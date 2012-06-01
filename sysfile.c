@@ -425,9 +425,8 @@ sys_pipe(void)
 }
 
 /* A&T create swapfile */
-int swapfile_open(char* path) {
+int swapfile_open(char* path, struct file *f) {
     int fd;
-    struct file *f;
     struct inode *ip;
 
     begin_trans();

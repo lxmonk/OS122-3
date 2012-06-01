@@ -21,7 +21,7 @@ extern void trapret(void);
 
 static void wakeup1(void *chan);
 
-int swapfile_open(char* path);  /* A&T forward-declaration */
+int swapfile_open(char* path, struct file *f);  /* A&T forward-declaration */
 
 void
 pinit(void)
@@ -79,7 +79,7 @@ found:
       itoa(p->pid, &p->pagefile_name[5]);
 
       /* A&T open the pagefile and save the fd */
-      if ((p->pagefile_fd = swapfile_open(p->pagefile_name)) < 0)
+      if ((swapfile_open(p->pagefile_name, p->pagefile)) < 0)
           return 0;
 
       memset(p->pagefile_addr, 0, sizeof(int) * MAX_SWAP_PAGES);
@@ -486,4 +486,13 @@ procdump(void)
     }
     cprintf("\n");
   }
+}
+
+
+uint* get_pagefile_addr(void) {
+    return proc->pagefile_addr;
+}
+struct file* get_pagefile(void) {
+    return proc->pagefile;
+
 }

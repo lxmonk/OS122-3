@@ -153,3 +153,8 @@ filewrite(struct file *f, char *addr, int n)
   }
   panic("filewrite");
 }
+
+/* A&T set offset */
+void set_f_offset(struct file *f, uint new_off) {
+    f->off = new_off;
+}

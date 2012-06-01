@@ -32,6 +32,9 @@ int             fileread(struct file*, char*, int n);
 int             filestat(struct file*, struct stat*);
 int             filewrite(struct file*, char*, int n);
 
+/* A&T */
+void            set_f_offset(struct file*, uint);
+
 // fs.c
 void            readsb(int dev, struct superblock *sb);
 int             dirlink(struct inode*, char*, uint);
@@ -116,6 +119,10 @@ void            userinit(void);
 int             wait(void);
 void            wakeup(void*);
 void            yield(void);
+
+/* A&T */
+uint*           get_pagefile_addr(void);
+struct file*    get_pagefile(void);
 
 // swtch.S
 void            swtch(struct context**, struct context*);

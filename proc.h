@@ -70,10 +70,12 @@ struct proc {
   struct inode *cwd;           // Current directory
   char name[16];               // Process name (debugging)
 
-  int pagefile_fd;             // A&T pagefile file-descriptor
-  int pagefile_addr[MAX_SWAP_PAGES];       /* A&T ADT to hold memory pages'
-                                * offset in to the pagefile */
+  struct file *pagefile;             /* A&T pagefile file-descriptor */
+  uint pagefile_addr[MAX_SWAP_PAGES];       /* A&T ADT to hold memory pages'
+                               * offset in to the pagefile */
   char pagefile_name[20];     /* name of swap pagefile. */
+    int pages_in_mem;
+    int swapped_pages;
 };
 
 // Process memory is laid out contiguously, low addresses first:
