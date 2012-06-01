@@ -19,8 +19,6 @@ kernel
 /README
 /TRICKS
 /dot-bochsrc
-/entry.S
-/entryother.S
 /kernel.ld
 /runoff
 /runoff.list
@@ -28,3 +26,8 @@ kernel
 /runoff1
 /toc.ftr
 /toc.hdr
+entryother 
+initcode 
+vectors.S
+entryother
+initcode
