@@ -13,11 +13,6 @@ kernel
 /mkfs
 *.patch
 
-/BUGS
-/LICENSE
-/Notes
-/README
-/TRICKS
 /runoff1
 /toc.ftr
 /toc.hdr
