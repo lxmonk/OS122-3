@@ -1,5 +1,6 @@
 // Segments in proc->gdt.
 #define NSEGS     7
+#define MAX_SWAP_PAGES 15	/* A&T */
 
 // Per-CPU state
 struct cpu {
@@ -10,7 +11,7 @@ struct cpu {
   volatile uint started;        // Has the CPU started?
   int ncli;                    // Depth of pushcli nesting.
   int intena;                  // Were interrupts enabled before pushcli?
-  
+
   // Cpu-local storage variables; see below
   struct cpu *cpu;
   struct proc *proc;           // The currently-running process.
@@ -68,6 +69,11 @@ struct proc {
   struct file *ofile[NOFILE];  // Open files
   struct inode *cwd;           // Current directory
   char name[16];               // Process name (debugging)
+
+  int pagefile_fd;             // A&T pagefile file-descriptor
+  int pagefile_addr[MAX_SWAP_PAGES];       /* A&T ADT to hold memory pages'
+                                * offset in to the pagefile */
+  char pagefile_name[20];     /* name of swap pagefile. */
 };
 
 // Process memory is laid out contiguously, low addresses first:

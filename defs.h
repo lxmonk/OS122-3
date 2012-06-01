@@ -137,6 +137,8 @@ char*           safestrcpy(char*, const char*, int);
 int             strlen(const char*);
 int             strncmp(const char*, const char*, uint);
 char*           strncpy(char*, const char*, int);
+int             itoa(int n, char* str); /* A&T int to string */
+
 
 // syscall.c
 int             argint(int, int*);

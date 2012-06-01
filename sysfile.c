@@ -54,7 +54,7 @@ sys_dup(void)
 {
   struct file *f;
   int fd;
-  
+
   if(argfd(0, 0, &f) < 0)
     return -1;
   if((fd=fdalloc(f)) < 0)
@@ -92,7 +92,7 @@ sys_close(void)
 {
   int fd;
   struct file *f;
-  
+
   if(argfd(0, &fd, &f) < 0)
     return -1;
   proc->ofile[fd] = 0;
@@ -105,7 +105,7 @@ sys_fstat(void)
 {
   struct file *f;
   struct stat *st;
-  
+
   if(argfd(0, 0, &f) < 0 || argptr(1, (void*)&st, sizeof(*st)) < 0)
     return -1;
   return filestat(f, st);
@@ -341,7 +341,7 @@ sys_mknod(void)
   char *path;
   int len;
   int major, minor;
-  
+
   begin_trans();
   if((len=argstr(0, &path)) < 0 ||
      argint(1, &major) < 0 ||
@@ -422,4 +422,32 @@ sys_pipe(void)
   fd[0] = fd0;
   fd[1] = fd1;
   return 0;
+}
+
+/* A&T create swapfile */
+int swapfile_open(char* path) {
+    int fd;
+    struct file *f;
+    struct inode *ip;
+
+    begin_trans();
+    ip = create(path, T_FILE, 0, 0);
+    commit_trans();
+    if(ip == 0)
+        return -1;
+
+    if((f = filealloc()) == 0 || (fd = fdalloc(f)) < 0){
+        if(f)
+            fileclose(f);
+        iunlockput(ip);
+        return -1;
+    }
+    iunlock(ip);
+
+    f->type = FD_INODE;
+    f->ip = ip;
+    f->off = 0;
+    f->readable = 1;
+    f->writable = 1;
+    return fd;
 }

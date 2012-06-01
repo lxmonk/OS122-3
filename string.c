@@ -16,7 +16,7 @@ int
 memcmp(const void *v1, const void *v2, uint n)
 {
   const uchar *s1, *s2;
-  
+
   s1 = v1;
   s2 = v2;
   while(n-- > 0){
@@ -69,7 +69,7 @@ char*
 strncpy(char *s, const char *t, int n)
 {
   char *os;
-  
+
   os = s;
   while(n-- > 0 && (*s++ = *t++) != 0)
     ;
@@ -83,7 +83,7 @@ char*
 safestrcpy(char *s, const char *t, int n)
 {
   char *os;
-  
+
   os = s;
   if(n <= 0)
     return os;
@@ -103,3 +103,25 @@ strlen(const char *s)
   return n;
 }
 
+/* A&T itoa */
+int
+itoa(int n, char* str) {
+    int digit, len, ret;
+    char c;
+
+    len = 0;
+    digit = 0;
+    do {
+        str[digit++] = n % 10 + '0';
+    } while ((n /= 10) > 0);
+    str[digit] = '\0';
+    ret = digit;
+
+    for(digit = 0, len = ret - 1; digit < len; digit++, len--) {
+        c = str[digit];
+        str[digit] = str[len];
+        str[len] = c;
+    }
+
+    return ret;
+}
