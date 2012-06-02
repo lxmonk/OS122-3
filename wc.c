@@ -16,12 +16,12 @@ wc(int fd, char *name)
     for(i=0; i<n; i++){
       c++;
       if(buf[i] == '\n')
-        l++;
+	l++;
       if(strchr(" \r\t\n\v", buf[i]))
-        inword = 0;
+	inword = 0;
       else if(!inword){
-        w++;
-        inword = 1;
+	w++;
+	inword = 1;
       }
     }
   }

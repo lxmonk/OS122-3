@@ -123,6 +123,11 @@ void            yield(void);
 /* A&T */
 uint*           get_pagefile_addr(void);
 struct file*    get_pagefile(void);
+void dec_swapped_pages_number(void);
+void inc_swapped_pages_number(void);
+void inc_mapped_pages_number(void);
+int get_mapped_pages_number(void);
+int not_shell_init(void);
 
 // swtch.S
 void            swtch(struct context**, struct context*);
@@ -185,6 +190,9 @@ void            switchuvm(struct proc*);
 void            switchkvm(void);
 int             copyout(pde_t*, uint, void*, uint);
 void            clearpteu(pde_t *pgdir, char *uva);
+/* A&T */
+void set_init_done(void);
+
 
 // number of elements in fixed-size array
 #define NELEM(x) (sizeof(x)/sizeof((x)[0]))

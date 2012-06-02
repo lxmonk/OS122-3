@@ -13,6 +13,7 @@ struct segdesc gdt[NSEGS];
 
 /* A&T replacement algorithm */
 enum alg {RANDOM, FIFO, NFU, NONE};
+static int init_done = 0;	/* set to 1 once init is done */
 
 /* here will be a macro */
 static enum alg replacement_alg = RANDOM;
@@ -49,7 +50,7 @@ seginit(void)
 /* A&T forward decl */
 int swap_in(pde_t *pgtab, uint pd_idx, pde_t *pde);
 uint page_to_swap(pde_t *pgdir, enum alg replacement_alg);
-int swap_out(uint pd_idx, pde_t *pgdir);
+int swap_to_file(uint pd_idx, pde_t *pgdir);
 
 // Return the address of the PTE in page table pgdir
 // that corresponds to virtual address va.  If alloc!=0,
@@ -65,8 +66,9 @@ walkpgdir(pde_t *pgdir, const void *va, int alloc)
   if(*pde & PTE_P){
     pgtab = (pte_t*)p2v(PTE_ADDR(*pde));
   } else if (*pde & PTE_PG) {	/* A&T */
+      cprintf("swapping in!!\n");
       if ((pgtab = (pte_t*)kalloc()) == 0)
-          return 0;		/* can't kalloc */
+	  return 0;		/* can't kalloc */
       /* A&T read to pgtab from file, and update the new
        * physical address (PPN) in the pgdir. Set
        * the PTE_P bit, and clear the PTE_PG bit.
@@ -75,18 +77,29 @@ walkpgdir(pde_t *pgdir, const void *va, int alloc)
       swap_in(pgtab, PDX(va), pde);
 
       page = page_to_swap(pgdir, replacement_alg);
-      swap_out(page, pgdir);
+      swap_to_file(page, pgdir);
 
       /* A&T end swapping */
   } else {
-    if(!alloc || (pgtab = (pte_t*)kalloc()) == 0)
-      return 0;
-    // Make sure all those PTE_P bits are zero.
-    memset(pgtab, 0, PGSIZE);
-    // The permissions here are overly generous, but they can
-    // be further restricted by the permissions in the page table
-    // entries, if necessary.
-    *pde = v2p(pgtab) | PTE_P | PTE_W | PTE_U;
+      if(!alloc || (pgtab = (pte_t*)kalloc()) == 0)
+	  return 0;
+
+    /* A&T should we swap another page? */
+      if (init_done && not_shell_init() &&
+	  (get_mapped_pages_number() == MAX_PSYC_PAGES)) {
+	cprintf("get_mapped_pages_number() == MAX_PSYC_PAGES\n");
+	page = page_to_swap(pgdir, replacement_alg);
+	swap_to_file(page, pgdir);
+      } else if (init_done && not_shell_init()) {
+	  inc_mapped_pages_number();
+      }   /* A&T end */
+
+      // Make sure all those PTE_P bits are zero.
+      memset(pgtab, 0, PGSIZE);
+      // The permissions here are overly generous, but they can
+      // be further restricted by the permissions in the page table
+      // entries, if necessary.
+      *pde = v2p(pgtab) | PTE_P | PTE_W | PTE_U;
   }
   return &pgtab[PTX(va)];
 }
@@ -165,7 +178,7 @@ setupkvm()
     panic("PHYSTOP too high");
   for(k = kmap; k < &kmap[NELEM(kmap)]; k++)
     if(mappages(pgdir, k->virt, k->phys_end - k->phys_start,
-                (uint)k->phys_start, k->perm) < 0)
+		(uint)k->phys_start, k->perm) < 0)
       return 0;
   return pgdir;
 }
@@ -290,7 +303,7 @@ deallocuvm(pde_t *pgdir, uint oldsz, uint newsz)
     else if((*pte & PTE_P) != 0){
       pa = PTE_ADDR(*pte);
       if(pa == 0)
-        panic("kfree");
+	panic("kfree");
       char *v = p2v(pa);
       kfree(v);
       *pte = 0;
@@ -415,44 +428,71 @@ int swap_in(pde_t *pgtab, uint pd_idx, pde_t *pde) {
 
     pagefile_addr = get_pagefile_addr();
     for (i = 0; i < MAX_SWAP_PAGES; i++) {
-        if (pagefile_addr[i] == pd_idx) {
-            pagefile_addr[i] = 0;
-            break;
-        }
+	if (pagefile_addr[i] == pd_idx) {
+	    pagefile_addr[i] = 0;
+	    break;
+	}
     }
     if (i == MAX_SWAP_PAGES)
-        return -1;
+	return -1;
 
     f = get_pagefile();
     set_f_offset(f, ((uint)i * PGSIZE));
     /* read from file to pgtab */
     fileread(f, (char *) pgtab, PGSIZE);
     *pde &= 0xFFF; /* A&T zero the leftmost 20 bits */
-    *pde |= v2p(pgtab);		/* update pgtab addr */
+    *pde |= v2p(pgtab);              /* update pgtab addr */
     *pde &= (~PTE_PG);		/* clear PTE_PG bit */
     *pde |= PTE_P;		/* set PTE_P bit */
+    dec_swapped_pages_number();
     return 0;
 }
 
+/* A&T  */
 uint page_to_swap(pde_t *pgdir, enum alg replacement_alg) {
-    return 0;
+    pde_t *pde;
+    int pd_idx;
+
+    for (pd_idx = 0; pd_idx < NPDENTRIES; pd_idx++) {
+	pde = &pgdir[pd_idx];
+	if(*pde & PTE_P)
+	    break;
+    }
+    if (pd_idx == NPDENTRIES)
+	return -1;
+
+    return pd_idx;
 }
-/* write the page table to the pagefile, clear PTE_P
+
+/* A&T
+ * write the page table to the pagefile, clear PTE_P
  * and set PTE_PG */
-int swap_out(uint pd_idx, pde_t *pgdir) {
+int swap_to_file(uint pd_idx, pde_t *pgdir) {
     uint *pagefile_addr;
     int i;
-    /* struct file *f; */
+    struct file *f;
+    char* v;
 
     pagefile_addr = get_pagefile_addr();
     for (i = 0; i < MAX_SWAP_PAGES; i++) {
-        if (pagefile_addr[i] == 0) {
-            pagefile_addr[i] = pd_idx;;
-            break;
-        }
+	if (pagefile_addr[i] == 0) {
+	    pagefile_addr[i] = pd_idx;;
+	    break;
+	}
     }
     /* got until here */
-    /* f = get_pagefile(); */
+    f = get_pagefile();
+    set_f_offset(f, ((uint)i * PGSIZE));
+    filewrite(f, p2v(PTE_ADDR(pgdir[pd_idx])), PGSIZE); /* FIXME */
+    inc_swapped_pages_number();
+    pgdir[pd_idx] &= ~PTE_P;
+    pgdir[pd_idx] |= PTE_PG;
+    v = p2v(PTE_ADDR(pgdir[pd_idx]));
+    cprintf("v= %x\n", v);
+    /* kfree(v);			/\* free the page *\/ */
+    return 0;
+}
 
-    return 99999;
+void set_init_done(void) {
+    init_done = 1;
 }

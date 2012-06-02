@@ -1,6 +1,8 @@
 // Segments in proc->gdt.
 #define NSEGS     7
 #define MAX_SWAP_PAGES 15	/* A&T */
+#define MAX_PSYC_PAGES 15	/* A&T */
+#define MAX_TOTAL_PAGES ((MAX_PSYC_PAGES) + (MAX_SWAP_PAGES)) /* A&T */
 
 // Per-CPU state
 struct cpu {
@@ -72,10 +74,10 @@ struct proc {
 
   struct file *pagefile;             /* A&T pagefile file-descriptor */
   uint pagefile_addr[MAX_SWAP_PAGES];       /* A&T ADT to hold memory pages'
-                               * offset in to the pagefile */
+			       * offset in to the pagefile */
   char pagefile_name[20];     /* name of swap pagefile. */
-    int pages_in_mem;
-    int swapped_pages;
+  int pages_in_mem;
+  int swapped_pages;
 };
 
 // Process memory is laid out contiguously, low addresses first:
