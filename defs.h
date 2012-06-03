@@ -196,3 +196,9 @@ void set_init_done(void);
 
 // number of elements in fixed-size array
 #define NELEM(x) (sizeof(x)/sizeof((x)[0]))
+
+/* A&T DEBUG PRINT */
+#define K_DEBUG_PRINT(level, fmt, ...)					\
+    do { if (T_A_DEBUG >= level) cprintf("%s:%d:%s(): " fmt "\n",	\
+                                         __FILE__, __LINE__, __func__,	\
+                                         __VA_ARGS__); } while (0)

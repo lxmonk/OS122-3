@@ -7,6 +7,9 @@
 #include "x86.h"
 #include "elf.h"
 
+/* A&T */
+#define T_A_DEBUG 3
+
 int
 exec(char *path, char **argv)
 {
@@ -81,6 +84,9 @@ exec(char *path, char **argv)
     if(*s == '/')
       last = s+1;
   safestrcpy(proc->name, last, sizeof(proc->name));
+
+  /* K_DEBUG_PRINT(3, "(new) path=%s, pid=%d, proc->name=%s", */
+  /*               path, proc->pid, proc->name); */
 
   // Commit to the user image.
   oldpgdir = proc->pgdir;

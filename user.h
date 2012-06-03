@@ -36,3 +36,9 @@ void* memset(void*, int, uint);
 void* malloc(uint);
 void free(void*);
 int atoi(const char*);
+
+/* A&T debug print */
+#define DEBUG_PRINT(level, fmt, ...)					\
+    do { if (T_A_DEBUG >= level) printf(2, "<%s>:%d:[%s()]: " fmt "\n", \
+                                        __FILE__, __LINE__, __func__,	\
+                                        __VA_ARGS__); } while (0)

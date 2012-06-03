@@ -80,7 +80,7 @@ found:
 
       /* A&T open the pagefile and save the fd */
       if ((swapfile_open(p->pagefile_name, p->pagefile)) < 0)
-	  return 0;
+          return 0;
 
       memset(p->pagefile_addr, 0, sizeof(int) * MAX_SWAP_PAGES);
       p->pages_in_mem = 0;
@@ -210,7 +210,7 @@ exit(void)
     if(p->parent == proc){
       p->parent = initproc;
       if(p->state == ZOMBIE)
-	wakeup1(initproc);
+        wakeup1(initproc);
     }
   }
 
@@ -234,21 +234,21 @@ wait(void)
     havekids = 0;
     for(p = ptable.proc; p < &ptable.proc[NPROC]; p++){
       if(p->parent != proc)
-	continue;
+        continue;
       havekids = 1;
       if(p->state == ZOMBIE){
-	// Found one.
-	pid = p->pid;
-	kfree(p->kstack);
-	p->kstack = 0;
-	freevm(p->pgdir);
-	p->state = UNUSED;
-	p->pid = 0;
-	p->parent = 0;
-	p->name[0] = 0;
-	p->killed = 0;
-	release(&ptable.lock);
-	return pid;
+        // Found one.
+        pid = p->pid;
+        kfree(p->kstack);
+        p->kstack = 0;
+        freevm(p->pgdir);
+        p->state = UNUSED;
+        p->pid = 0;
+        p->parent = 0;
+        p->name[0] = 0;
+        p->killed = 0;
+        release(&ptable.lock);
+        return pid;
       }
     }
 
@@ -272,7 +272,7 @@ register_handler(sighandler_t sighandler)
 
     /* open a new frame */
   *(int*)(addr + ((proc->tf->esp - 4) & 0xFFF))
-	  = proc->tf->eip;
+          = proc->tf->eip;
   proc->tf->esp -= 4;
 
     /* update eip */
@@ -301,7 +301,7 @@ scheduler(void)
     acquire(&ptable.lock);
     for(p = ptable.proc; p < &ptable.proc[NPROC]; p++){
       if(p->state != RUNNABLE)
-	continue;
+        continue;
 
       // Switch to chosen process.  It is the process's job
       // to release ptable.lock and then reacquire it
@@ -444,7 +444,7 @@ kill(int pid)
       p->killed = 1;
       // Wake process from sleep if necessary.
       if(p->state == SLEEPING)
-	p->state = RUNNABLE;
+        p->state = RUNNABLE;
       release(&ptable.lock);
       return 0;
     }
@@ -484,7 +484,7 @@ procdump(void)
     if(p->state == SLEEPING){
       getcallerpcs((uint*)p->context->ebp+2, pc);
       for(i=0; i<10 && pc[i] != 0; i++)
-	cprintf(" %p", pc[i]);
+        cprintf(" %p", pc[i]);
     }
     cprintf("\n");
   }
@@ -510,11 +510,18 @@ void inc_mapped_pages_number(void) {
     proc->pages_in_mem++;
 }
 int get_mapped_pages_number(void) {
-    cprintf("inside get_mapped_pages_number.\n");
+    cprintf("inside get_mapped_pages_number. pid=%d, name=%s\n",
+            proc->pid, proc->name);
     cprintf("proc->pages_in_mem=%d\n", proc->pages_in_mem);
     return proc->pages_in_mem;
 }
 
 int not_shell_init() {
-    return (proc->pid > 2);
+    int ret;
+    ret = ((proc->pid > 2) &&
+            !((proc->name[0] == 's') && (proc->name[1] == 'h') &&
+              (proc->name[2] == 0)));
+    cprintf("not_shell_init: pid=%d, name=%s, ret=%d\n",
+            proc->pid, proc->name, ret);
+    return ret;
 }
