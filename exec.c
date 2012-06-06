@@ -21,6 +21,11 @@ exec(char *path, char **argv)
   struct proghdr ph;
   pde_t *pgdir, *oldpgdir;
 
+  //A&T clear swap info
+  memset(proc->pagefile_addr, UNUSED_VA, sizeof(int) * MAX_SWAP_PAGES);
+  proc->pages_in_mem = 0;
+  proc->swapped_pages = 0;
+
   if((ip = namei(path)) == 0)
     return -1;
   ilock(ip);

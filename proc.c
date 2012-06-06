@@ -23,6 +23,7 @@ extern void trapret(void);
 static void wakeup1(void *chan);
 
 struct file* swapfile_open(char* path);  /* A&T forward-declaration */
+int not_sonof_shell_init();
 
 void
 pinit(void)
@@ -82,7 +83,7 @@ found:
       /* A&T open the pagefile and save the fd */
       p->pagefile = swapfile_open(p->pagefile_name);
       K_DEBUG_PRINT(3,"pagefile %x",p->pagefile);
-      memset(p->pagefile_addr, 0, sizeof(int) * MAX_SWAP_PAGES);
+      memset(p->pagefile_addr, UNUSED_VA, sizeof(int) * MAX_SWAP_PAGES);
       p->pages_in_mem = 0;
       p->swapped_pages = 0;
   }
@@ -147,7 +148,7 @@ fork(void)
 {
   int i, pid;
   struct proc *np;
-  char pagebuffer[PGSIZE];
+  K_DEBUG_PRINT(3,"pagefile = %x",proc->pagefile);
 
   // Allocate process.
   if((np = allocproc()) == 0)
@@ -166,6 +167,7 @@ fork(void)
 
   // Clear %eax so that fork returns 0 in the child.
   np->tf->eax = 0;
+  K_DEBUG_PRINT(3,"pagefile = %x",proc->pagefile);
 
   for(i = 0; i < NOFILE; i++)
     if(proc->ofile[i])
@@ -177,23 +179,24 @@ fork(void)
   safestrcpy(np->name, proc->name, sizeof(proc->name));
 
   //A&T start
-  if (not_shell_init()) {
+  if (not_shell_init() && not_sonof_shell_init() && (proc->pagefile != 0)) {
       np->swapped_pages = proc->swapped_pages;
       np->pages_in_mem = proc->pages_in_mem;
       /* A&T create the file name for swapping out */
-      safestrcpy(np->pagefile_name, ".page", 6);
-      itoa(np->pid, &np->pagefile_name[5]);
       memmove(proc->pagefile_addr,np->pagefile_addr,MAX_SWAP_PAGES);
       np->pagefile = swapfile_open(np->pagefile_name);
-      for(i = 0; i < MAX_SWAP_PAGES;i++) {
-          set_f_offset(proc->pagefile,i*PGSIZE);
-          set_f_offset(np->pagefile,i*PGSIZE);
-          if (fileread(proc->pagefile,pagebuffer,PGSIZE) < 0)
-              panic("fork: unable to read from parent swap file\n");
-          if (filewrite(np->pagefile,pagebuffer,PGSIZE) < 0)
-              panic("fork: unable to write to child swap file\n");
-      }
-  }
+      K_DEBUG_PRINT(3,"pagefile = %x, name = %s , pid = %d",proc->pagefile,proc->name,proc->pid);
+      /* char pagebuffer[PGSIZE]; */
+      /* for(i = 0; i < MAX_SWAP_PAGES;i++) { */
+      /*     K_DEBUG_PRINT(3,"pagefile = %x",proc->pagefile); */
+      /*     set_f_offset(proc->pagefile,i*PGSIZE); */
+      /*     set_f_offset(np->pagefile,i*PGSIZE); */
+      /*     if (fileread(proc->pagefile,pagebuffer,1) < 0) */
+      /*         panic("fork: unable to read from parent swap file\n"); */
+      /*     if (filewrite(np->pagefile,pagebuffer,PGSIZE) < 0) */
+      /*         panic("fork: unable to write to child swap file\n"); */
+      /* } */
+   }
 
   return pid;
 }
@@ -552,7 +555,18 @@ int not_shell_init() {
     ret = ((proc->pid > 2) &&
             !((proc->name[0] == 's') && (proc->name[1] == 'h') &&
               (proc->name[2] == 0)));
-    cprintf("not_shell_init: pid=%d, name=%s, ret=%d\n",
+    K_DEBUG_PRINT(4,"not_shell_init: pid=%d, name=%s, ret=%d\n",
             proc->pid, proc->name, ret);
+    return ret;
+}
+
+int not_sonof_shell_init() {
+    int ret;
+
+    ret = ((proc->parent->pid > 2) &&
+           !((proc->parent->name[0] == 's') && (proc->parent->name[1] == 'h') &&
+             (proc->parent->name[2] == 0)));
+    K_DEBUG_PRINT(4,"not_shell_init: pid=%d, name=%s, ret=%d\n",
+                  proc->parent->pid, proc->parent->name, ret);
     return ret;
 }

@@ -430,7 +430,7 @@ int swap_from_file(uint va) {
     pfile_va_arr = get_pagefile_addr();
     for (i = 0; i < MAX_SWAP_PAGES; i++) {
         if (pfile_va_arr[i] == va) {
-            pfile_va_arr[i] = 0;
+            pfile_va_arr[i] = UNUSED_VA;
             break;
         }
     }
@@ -512,7 +512,7 @@ int swap_to_file(pde_t *pgdir) {
 
     pagefile_addr = get_pagefile_addr();
     for (i = 0; i < MAX_SWAP_PAGES; i++) {
-        if (pagefile_addr[i] == 0) {
+        if (pagefile_addr[i] == UNUSED_VA) {
             //saves va address of swap page
             pagefile_addr[i] = va_page;
             break;
