@@ -79,6 +79,7 @@ trap(struct trapframe *tf)
     break;
 
   case T_PGFLT:
+      bring_from_swap(rcr2());
       cprintf("********************page fault!!********************\n");
       break;
   //PAGEBREAK: 13

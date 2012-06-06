@@ -9,6 +9,8 @@
 #include "file.h"
 #include "spinlock.h"
 
+
+
 struct devsw devsw[NDEV];
 struct {
   struct spinlock lock;
@@ -118,6 +120,7 @@ filewrite(struct file *f, char *addr, int n)
 {
   int r;
 
+  K_DEBUG_PRINT(4,"f->type = %d , f= %x",f->type,f);
   if(f->writable == 0)
     return -1;
   if(f->type == FD_PIPE)

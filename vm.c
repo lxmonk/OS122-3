@@ -8,7 +8,8 @@
 #include "elf.h"
 
 
-#define T_A_DEBUG 3
+
+#define MAX_PSYC_MEM (MAX_PSYC_PAGES * PGSIZE)
 
 extern char data[];  // defined by kernel.ld
 pde_t *kpgdir;  // for use in scheduler()
@@ -19,7 +20,7 @@ enum alg {RANDOM, FIFO, NFU, NONE};
 static int init_done = 0;	/* set to 1 once init is done */
 
 /* here will be a macro */
-/* static enum alg replacement_alg = RANDOM; */
+static enum alg replacement_alg = RANDOM;
 
 
 
@@ -52,8 +53,8 @@ seginit(void)
 }
 /* A&T forward decl */
 int swap_in(pde_t *pgtab, uint pd_idx, pde_t *pde);
-uint page_to_swap(pde_t *pgdir, enum alg replacement_alg);
-int swap_to_file(uint pd_idx, pde_t *pgdir);
+uint  page_to_swap(pde_t *pgdir, enum alg replacement_alg);
+int swap_to_file(pde_t *pgdir);
 
 // Return the address of the PTE in page table pgdir
 // that corresponds to virtual address va.  If alloc!=0,
@@ -68,22 +69,7 @@ walkpgdir(pde_t *pgdir, const void *va, int alloc)
   pde = &pgdir[PDX(va)];
   if(*pde & PTE_P){
     pgtab = (pte_t*)p2v(PTE_ADDR(*pde));
-  } /* else if (*pde & PTE_PG) {	/\* A&T *\/ */
-  /*     cprintf("swapping in!!\n"); */
-  /*     if ((pgtab = (pte_t*)kalloc()) == 0) */
-  /*         return 0;		/\* can't kalloc *\/ */
-  /*     /\* A&T read to pgtab from file, and update the new */
-  /*      * physical address (PPN) in the pgdir. Set */
-  /*      * the PTE_P bit, and clear the PTE_PG bit. */
-  /*      * don't forget to clear the corresponding place in */
-  /*      * pagefile_addr array *\/ */
-  /*     swap_in(pgtab, PDX(va), pde); */
-
-  /*     page = page_to_swap(pgdir, replacement_alg); */
-  /*     swap_to_file(page, pgdir); */
-
-  /*     /\* A&T end swapping *\/ */
-  /* } */ else {
+  } else {
       if(!alloc || (pgtab = (pte_t*)kalloc()) == 0)
           return 0;
 
@@ -122,7 +108,8 @@ mappages(pde_t *pgdir, void *va, uint size, uint pa, int perm)
     if((pte = walkpgdir(pgdir, a, 1)) == 0)
       return -1;
     if(*pte & PTE_P)
-      panic("remap");
+        panic("remap");
+
     *pte = pa | perm | PTE_P;
     if(a == last)
       break;
@@ -272,15 +259,21 @@ allocuvm(pde_t *pgdir, uint oldsz, uint newsz)
     return oldsz;
 
   a = PGROUNDUP(oldsz);
-  for(; a < newsz; a += PGSIZE){
-    mem = kalloc();
-    if(mem == 0){
-      cprintf("allocuvm out of memory\n");
-      deallocuvm(pgdir, newsz, oldsz);
-      return 0;
-    }
-    memset(mem, 0, PGSIZE);
-    mappages(pgdir, (char*)a, PGSIZE, v2p(mem), PTE_W|PTE_U);
+  for(; a < newsz; a += PGSIZE) {
+      K_DEBUG_PRINT(3,"a = %x, a/PGSIZE = %x",a,a/PGSIZE);
+      // max pages in psyc memory
+      //      if ((a >= MAX_PSYC_MEM))
+      if ((get_mapped_pages_number() >= MAX_PSYC_PAGES))
+          swap_to_file(pgdir);
+      mem = kalloc();
+      if(mem == 0){
+          cprintf("allocuvm out of memory\n");
+          deallocuvm(pgdir, newsz, oldsz);
+          return 0;
+      }
+      memset(mem, 0, PGSIZE);
+      mappages(pgdir, (char*)a, PGSIZE, v2p(mem), PTE_W|PTE_U);
+      inc_mapped_pages_number();
   }
   return newsz;
 }
@@ -424,85 +417,133 @@ copyout(pde_t *pgdir, uint va, void *p, uint len)
  * the PTE_P bit, and clear the PTE_PG bit.
  * don't forget to clear the corresponding place in
  * pagefile_addr array */
-int swap_in(pde_t *pgtab, uint pd_idx, pde_t *pde) {
-    uint *pagefile_addr;
-    int i;
+int swap_from_file(uint va) {
+    uint *pfile_va_arr; //array of page va of the process
     struct file *f;
+    char *mem;
+    pte_t *pte;
+    int i;
 
-    K_DEBUG_PRINT(3, "inside.", 999);
-
-    pagefile_addr = get_pagefile_addr();
+    K_DEBUG_PRINT(3, "inside. va=%x", va);
+    va = PGROUNDDOWN((uint)va);
+    K_DEBUG_PRINT(3, "round down  va=%x", va);
+    pfile_va_arr = get_pagefile_addr();
     for (i = 0; i < MAX_SWAP_PAGES; i++) {
-        if (pagefile_addr[i] == pd_idx) {
-            pagefile_addr[i] = 0;
+        if (pfile_va_arr[i] == va) {
+            pfile_va_arr[i] = 0;
             break;
         }
     }
+    //not found in file
     if (i == MAX_SWAP_PAGES)
-        return -1;
+        panic("swap_from_file : page not in swap");
 
     f = get_pagefile();
     set_f_offset(f, ((uint)i * PGSIZE));
+
+    //allocate memort for page
+    mem = kalloc();
+    if(mem == 0){
+        panic(" can't swap from file'\n");
+        return 0;
+    }
+    memset(mem, 0, PGSIZE);
+    if ((pte = walkpgdir(get_pgdir(),(char*)va,0)) == 0)
+        panic("swap_from_file : page table not found");
     /* read from file to pgtab */
-    fileread(f, (char *) pgtab, PGSIZE);
-    *pde &= 0xFFF; /* A&T zero the leftmost 20 bits */
-    *pde |= v2p(pgtab);              /* update pgtab addr */
-    *pde &= (~PTE_PG);		/* clear PTE_PG bit */
-    *pde |= PTE_P;		/* set PTE_P bit */
+    fileread(f, mem , PGSIZE);
+    *pte &= 0xFFF; /* A&T zero the leftmost 20 bits */
+    *pte |= v2p(mem);  /* update pgtab addr */
+    *pte &= (~PTE_PG);		/* clear PTE_PG bit */
+    *pte |= PTE_P;		/* set PTE_P bit */
     dec_swapped_pages_number();
     return 0;
 }
 
-/* A&T  */
+/* A&T TODO: implement replacement algo */
+
 uint page_to_swap(pde_t *pgdir, enum alg replacement_alg) {
     pde_t *pde;
+    pte_t *pgtab;
     int pd_idx;
+    int ptable_idx;
+    uint  va;
 
     K_DEBUG_PRINT(3, "inside.", 999);
-
+    va=0;
     for (pd_idx = 0; pd_idx < NPDENTRIES; pd_idx++) {
         pde = &pgdir[pd_idx];
-        if(*pde & PTE_P)
-            break;
+        if(*pde & PTE_P) {
+            pgtab = (pte_t*)p2v(PTE_ADDR(*pde));
+            for (ptable_idx = 6; ptable_idx < NPDENTRIES; ptable_idx++) {
+                if(pgtab[ptable_idx] & PTE_P) {
+                    /* va = (*pde << PDXSHIFT); */
+                    /* va |= (*pgtab << PTXSHIFT); */
+                    va = PGADDR(pd_idx, ptable_idx, 0);
+                    K_DEBUG_PRINT(3, "pde_idx= %d,ptable_idx = %d, va=%x .",pd_idx,ptable_idx,va);
+                    K_DEBUG_PRINT(5, "pde = %x,pgtab = %x",*pde,*pgtab);
+                    return va;
+                }
+            }
+        }
     }
-    if (pd_idx == NPDENTRIES)
-        return -1;
-
-    return pd_idx;
+    return -1;
 }
 
 /* A&T
  * write the page table to the pagefile, clear PTE_P
  * and set PTE_PG */
-int swap_to_file(uint pd_idx, pde_t *pgdir) {
-    uint *pagefile_addr;
+int swap_to_file(pde_t *pgdir) {
+    uint *pagefile_addr; // A&T array of page va  address in swap
+    uint va_page; //page to swap to file
     int i;
     struct file *f;
     char* v;
+    pde_t *pte;
 
-    K_DEBUG_PRINT(3, "inside.", 999);
+    // check if not init or shell procces
+    if (!((init_done) && (not_shell_init())))
+        return -1;
+    if (get_swapped_pages_number() >= MAX_SWAP_PAGES)
+        return -1;
+    va_page = page_to_swap(pgdir, replacement_alg);
+
+    K_DEBUG_PRINT(3, "inside. va_page = %x", va_page);
 
     pagefile_addr = get_pagefile_addr();
     for (i = 0; i < MAX_SWAP_PAGES; i++) {
         if (pagefile_addr[i] == 0) {
-            pagefile_addr[i] = pd_idx;;
+            //saves va address of swap page
+            pagefile_addr[i] = va_page;
             break;
         }
     }
-    /* got until here */
+    // f = swap file
     f = get_pagefile();
     set_f_offset(f, ((uint)i * PGSIZE));
-    /* filewrite(f, ((void*)PTE_ADDR(pgdir[pd_idx])), */
-    /*           PGSIZE); */
+    //writing page to swap file
+    filewrite(f,(char *) va_page, PGSIZE);
     inc_swapped_pages_number();
-    pgdir[pd_idx] &= ~PTE_P;
-    pgdir[pd_idx] |= PTE_PG;
-    v = p2v(PTE_ADDR(pgdir[pd_idx]));
-    cprintf("v= %x\n", v);
+    if ((pte = walkpgdir(pgdir,(char *)va_page,0)) == 0)
+        panic("A&T page to swap problem ");
+    // set the flags - not present + in swap
+    *pte &= ~PTE_P;
+    *pte |= PTE_PG;
+    v = p2v(PTE_ADDR(*pte));
+    K_DEBUG_PRINT(3,"v= %x\n", v);
     kfree(v);			/* free the page */
     return 0;
 }
 
 void set_init_done(void) {
     init_done = 1;
+}
+
+int bring_from_swap(uint va) {
+    pde_t* pde;
+
+    pde = get_pgdir();
+    swap_to_file(pde);
+    swap_from_file(va);
+    return 0;
 }

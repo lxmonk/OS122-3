@@ -8,7 +8,7 @@
 #include "elf.h"
 
 /* A&T */
-#define T_A_DEBUG 3
+
 
 int
 exec(char *path, char **argv)

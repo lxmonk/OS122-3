@@ -71,13 +71,14 @@ struct proc {
   struct file *ofile[NOFILE];  // Open files
   struct inode *cwd;           // Current directory
   char name[16];               // Process name (debugging)
-
+    // A&T - start
   struct file *pagefile;             /* A&T pagefile file-descriptor */
   uint pagefile_addr[MAX_SWAP_PAGES];       /* A&T ADT to hold memory pages'
-			       * offset in to the pagefile */
+                               * offset in to the pagefile */
   char pagefile_name[20];     /* name of swap pagefile. */
   int pages_in_mem;
-  int swapped_pages;
+    int swapped_pages;
+    //A&T - end
 };
 
 // Process memory is laid out contiguously, low addresses first:

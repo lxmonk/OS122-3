@@ -16,7 +16,7 @@ int stdout = 1;
 // simple file system tests
 
 /* A&T DEBUG printing */
-#define T_A_DEBUG 3
+
 
 
 void

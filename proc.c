@@ -8,6 +8,7 @@
 #include "spinlock.h"
 
 
+
 struct {
   struct spinlock lock;
   struct proc proc[NPROC];
@@ -21,7 +22,7 @@ extern void trapret(void);
 
 static void wakeup1(void *chan);
 
-int swapfile_open(char* path, struct file *f);  /* A&T forward-declaration */
+struct file* swapfile_open(char* path);  /* A&T forward-declaration */
 
 void
 pinit(void)
@@ -79,9 +80,8 @@ found:
       itoa(p->pid, &p->pagefile_name[5]);
 
       /* A&T open the pagefile and save the fd */
-      if ((swapfile_open(p->pagefile_name, p->pagefile)) < 0)
-          return 0;
-
+      p->pagefile = swapfile_open(p->pagefile_name);
+      K_DEBUG_PRINT(3,"pagefile %x",p->pagefile);
       memset(p->pagefile_addr, 0, sizeof(int) * MAX_SWAP_PAGES);
       p->pages_in_mem = 0;
       p->swapped_pages = 0;
@@ -147,6 +147,7 @@ fork(void)
 {
   int i, pid;
   struct proc *np;
+  char pagebuffer[PGSIZE];
 
   // Allocate process.
   if((np = allocproc()) == 0)
@@ -174,6 +175,26 @@ fork(void)
   pid = np->pid;
   np->state = RUNNABLE;
   safestrcpy(np->name, proc->name, sizeof(proc->name));
+
+  //A&T start
+  if (not_shell_init()) {
+      np->swapped_pages = proc->swapped_pages;
+      np->pages_in_mem = proc->pages_in_mem;
+      /* A&T create the file name for swapping out */
+      safestrcpy(np->pagefile_name, ".page", 6);
+      itoa(np->pid, &np->pagefile_name[5]);
+      memmove(proc->pagefile_addr,np->pagefile_addr,MAX_SWAP_PAGES);
+      np->pagefile = swapfile_open(np->pagefile_name);
+      for(i = 0; i < MAX_SWAP_PAGES;i++) {
+          set_f_offset(proc->pagefile,i*PGSIZE);
+          set_f_offset(np->pagefile,i*PGSIZE);
+          if (fileread(proc->pagefile,pagebuffer,PGSIZE) < 0)
+              panic("fork: unable to read from parent swap file\n");
+          if (filewrite(np->pagefile,pagebuffer,PGSIZE) < 0)
+              panic("fork: unable to write to child swap file\n");
+      }
+  }
+
   return pid;
 }
 
@@ -494,7 +515,14 @@ procdump(void)
 uint* get_pagefile_addr(void) {
     return proc->pagefile_addr;
 }
+
+pde_t*  get_pgdir() {
+    return proc->pgdir;
+}
+
 struct file* get_pagefile(void) {
+    K_DEBUG_PRINT(3,"filename = %s",proc->pagefile_name);
+    K_DEBUG_PRINT(3,"file address = %x",proc->pagefile);
     return proc->pagefile;
 
 }
@@ -504,6 +532,9 @@ void dec_swapped_pages_number(void) {
 }
 void inc_swapped_pages_number(void) {
     proc->swapped_pages++;
+}
+int get_swapped_pages_number(void) {
+    return proc->swapped_pages;
 }
 
 void inc_mapped_pages_number(void) {

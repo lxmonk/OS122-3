@@ -42,3 +42,5 @@ int atoi(const char*);
     do { if (T_A_DEBUG >= level) printf(2, "<%s>:%d:[%s()]: " fmt "\n", \
                                         __FILE__, __LINE__, __func__,	\
                                         __VA_ARGS__); } while (0)
+
+#define T_A_DEBUG 0

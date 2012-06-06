@@ -125,9 +125,11 @@ uint*           get_pagefile_addr(void);
 struct file*    get_pagefile(void);
 void dec_swapped_pages_number(void);
 void inc_swapped_pages_number(void);
+int get_swapped_pages_number(void);
 void inc_mapped_pages_number(void);
 int get_mapped_pages_number(void);
 int not_shell_init(void);
+pde_t*  get_pgdir();
 
 // swtch.S
 void            swtch(struct context**, struct context*);
@@ -192,7 +194,7 @@ int             copyout(pde_t*, uint, void*, uint);
 void            clearpteu(pde_t *pgdir, char *uva);
 /* A&T */
 void set_init_done(void);
-
+int bring_from_swap(uint);
 
 // number of elements in fixed-size array
 #define NELEM(x) (sizeof(x)/sizeof((x)[0]))
@@ -202,3 +204,5 @@ void set_init_done(void);
     do { if (T_A_DEBUG >= level) cprintf("%s:%d:%s(): " fmt "\n",	\
                                          __FILE__, __LINE__, __func__,	\
                                          __VA_ARGS__); } while (0)
+
+#define  T_A_DEBUG 3

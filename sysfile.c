@@ -425,28 +425,29 @@ sys_pipe(void)
 }
 
 /* A&T create swapfile */
-int swapfile_open(char* path, struct file *f) {
+struct file* swapfile_open(char* path) {
     int fd;
     struct inode *ip;
+    struct file *f;
 
     begin_trans();
     ip = create(path, T_FILE, 0, 0);
     commit_trans();
     if(ip == 0)
-        return -1;
+        return (struct file*)-1;
 
     if((f = filealloc()) == 0 || (fd = fdalloc(f)) < 0){
         if(f)
             fileclose(f);
         iunlockput(ip);
-        return -1;
+        return (struct file*)-1;
     }
     iunlock(ip);
-
+    K_DEBUG_PRINT(3,"f %x",f);
     f->type = FD_INODE;
     f->ip = ip;
     f->off = 0;
     f->readable = 1;
     f->writable = 1;
-    return fd;
+    return f;
 }
