@@ -186,7 +186,7 @@ fork(void)
       memmove(proc->pagefile_addr,np->pagefile_addr,MAX_SWAP_PAGES);
       np->pagefile = swapfile_open(np->pagefile_name);
       K_DEBUG_PRINT(3,"pagefile = %x, name = %s , pid = %d",proc->pagefile,proc->name,proc->pid);
-      /* char pagebuffer[PGSIZE]; */
+      /* Char pagebuffer[PGSIZE]; */
       /* for(i = 0; i < MAX_SWAP_PAGES;i++) { */
       /*     K_DEBUG_PRINT(3,"pagefile = %x",proc->pagefile); */
       /*     set_f_offset(proc->pagefile,i*PGSIZE); */
