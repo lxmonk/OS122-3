@@ -22,6 +22,8 @@ exec(char *path, char **argv)
   pde_t *pgdir, *oldpgdir;
 
   //A&T clear swap info
+  K_DEBUG_PRINT(3, "starting. path=%s", path);
+
   memset(proc->pagefile_addr, UNUSED_VA, sizeof(int) * MAX_SWAP_PAGES);
   proc->pages_in_mem = 0;
   proc->swapped_pages = 0;

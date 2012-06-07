@@ -84,10 +84,11 @@ found:
       p->pagefile = swapfile_open(p->pagefile_name);
       K_DEBUG_PRINT(3,"pagefile %x",p->pagefile);
       memset(p->pagefile_addr, UNUSED_VA, sizeof(int) * MAX_SWAP_PAGES);
+      K_DEBUG_PRINT(3,"memset done.", 999);
       p->pages_in_mem = 0;
       p->swapped_pages = 0;
   }
-
+  K_DEBUG_PRINT(3, "returning p=%x", p);
   return p;
 }
 
@@ -151,9 +152,13 @@ fork(void)
   K_DEBUG_PRINT(3,"pagefile = %x",proc->pagefile);
 
   // Allocate process.
-  if((np = allocproc()) == 0)
-    return -1;
 
+  if((np = allocproc()) == 0) {
+      K_DEBUG_PRINT(4, "allocproc returned 0", 999);
+    return -1;
+  }
+
+  K_DEBUG_PRINT(4, "after np = allocproc(). np = %x", np);
   // Copy process state from p.
   if((np->pgdir = copyuvm(proc->pgdir, proc->sz)) == 0){
     kfree(np->kstack);
@@ -186,15 +191,23 @@ fork(void)
       memmove(proc->pagefile_addr,np->pagefile_addr,MAX_SWAP_PAGES);
       np->pagefile = swapfile_open(np->pagefile_name);
       K_DEBUG_PRINT(3,"pagefile = %x, name = %s , pid = %d",proc->pagefile,proc->name,proc->pid);
-      /* Char pagebuffer[PGSIZE]; */
-      /* for(i = 0; i < MAX_SWAP_PAGES;i++) { */
-      /*     K_DEBUG_PRINT(3,"pagefile = %x",proc->pagefile); */
-      /*     set_f_offset(proc->pagefile,i*PGSIZE); */
-      /*     set_f_offset(np->pagefile,i*PGSIZE); */
-      /*     if (fileread(proc->pagefile,pagebuffer,1) < 0) */
-      /*         panic("fork: unable to read from parent swap file\n"); */
-      /*     if (filewrite(np->pagefile,pagebuffer,PGSIZE) < 0) */
-      /*         panic("fork: unable to write to child swap file\n"); */
+      /* if ((proc->pagefile != 0) && (np->pagefile != 0)) { */
+      /*     char pagebuffer[PGSIZE]; */
+
+      /*     for(i = 0; i < MAX_SWAP_PAGES;i++) { */
+      /*         K_DEBUG_PRINT(3,"copying pagefile proc->pagefile = %x",proc->pagefile); */
+      /*         set_f_offset(proc->pagefile,i*PGSIZE); */
+      /*         set_f_offset(np->pagefile,i*PGSIZE); */
+      /*         panic("fork: inside poisonous loope\n"); */
+      /*         if (fileread(proc->pagefile,pagebuffer,1) < 0) */
+      /*             panic("fork: unable to read from parent swap file\n"); */
+      /*         if (filewrite(np->pagefile,pagebuffer,PGSIZE) < 0) */
+      /*             panic("fork: unable to write to child swap file\n"); */
+      /*     } */
+      /* } else { */
+      /*     K_DEBUG_PRINT(3, "not copying pagefile. proc->pagefile=%x, proc->pid=%d, " */
+      /*                   "np->pagefile=%x, np->pid=%d", proc->pagefile, proc->pid, */
+      /*                   np->pagefile, np->pid); */
       /* } */
    }
 
@@ -544,9 +557,9 @@ void inc_mapped_pages_number(void) {
     proc->pages_in_mem++;
 }
 int get_mapped_pages_number(void) {
-    cprintf("inside get_mapped_pages_number. pid=%d, name=%s\n",
-            proc->pid, proc->name);
-    cprintf("proc->pages_in_mem=%d\n", proc->pages_in_mem);
+    K_DEBUG_PRINT(4,"inside get_mapped_pages_number. pid=%d, name=%s\n",
+                  proc->pid, proc->name);
+    K_DEBUG_PRINT(4, "proc->pages_in_mem=%d\n", proc->pages_in_mem);
     return proc->pages_in_mem;
 }
 
