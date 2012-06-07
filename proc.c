@@ -23,7 +23,8 @@ extern void trapret(void);
 static void wakeup1(void *chan);
 
 struct file* swapfile_open(char* path);  /* A&T forward-declaration */
-int not_sonof_shell_init();
+int not_sonof_shell_init(); //A&T
+int del_swap_file(char*); //A&T
 
 void
 pinit(void)
@@ -233,6 +234,10 @@ exit(void)
       proc->ofile[fd] = 0;
     }
   }
+
+  //A&T delete swap file (unlink)
+  if (not_shell_init())
+      del_swap_file(proc->pagefile_name);
 
   iput(proc->cwd);
   proc->cwd = 0;

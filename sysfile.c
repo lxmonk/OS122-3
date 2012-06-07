@@ -451,3 +451,63 @@ struct file* swapfile_open(char* path) {
     f->writable = 1;
     return f;
 }
+
+//A&T del the process swap file
+int del_swap_file(char* file_name)
+{
+    struct inode *ip, *dp;
+    struct dirent de;
+    char name[DIRSIZ], *path;
+    uint off;
+
+    //    path[0] = '/';
+    path = file_name;
+    K_DEBUG_PRINT(3,"file_name = %s , name = %s, path = %s",file_name,name,path);
+
+    if((dp = nameiparent(path, name)) == 0)
+        return -1;
+
+    begin_trans();
+
+    K_DEBUG_PRINT(3,"dp =  %x",(int)dp);
+
+
+    ilock(dp);
+
+    // Cannot unlink "." or "..".
+    if(namecmp(name, ".") == 0 || namecmp(name, "..") == 0)
+        goto bad;
+
+    if((ip = dirlookup(dp, name, &off)) == 0)
+        goto bad;
+    ilock(ip);
+
+    if(ip->nlink < 1)
+        panic("unlink: nlink < 1");
+    if(ip->type == T_DIR && !isdirempty(ip)){
+        iunlockput(ip);
+        goto bad;
+    }
+
+    memset(&de, 0, sizeof(de));
+    if(writei(dp, (char*)&de, off, sizeof(de)) != sizeof(de))
+        panic("unlink: writei");
+    if(ip->type == T_DIR){
+        dp->nlink--;
+        iupdate(dp);
+    }
+    iunlockput(dp);
+
+    ip->nlink--;
+    iupdate(ip);
+    iunlockput(ip);
+
+    commit_trans();
+
+    return 0;
+
+ bad:
+    iunlockput(dp);
+    commit_trans();
+    return -1;
+}
