@@ -575,6 +575,7 @@ int swap_to_file(pde_t *pgdir) {
     v = p2v(PTE_ADDR(*pte));
     K_DEBUG_PRINT(3,"v= %x\n", v);
     kfree(v);			/* free the page */
+
     return 0;
 }
 
@@ -595,7 +596,7 @@ int update_nfu_arr(pde_t* pgdir,uint* addr_arry,uint* nfu_arr)
 {
     int i;
     pte_t *pgtab;
-
+    //TODO: loop all process (except shell, init)
     for(i=0; i < MAX_PSYC_PAGES;i++) {
         nfu_arr[i] >>= 1; //right shift by 1
         if ((addr_arry[i] != UNUSED_VA) &&

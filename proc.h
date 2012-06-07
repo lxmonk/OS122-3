@@ -70,7 +70,8 @@ struct proc {
   int killed;                  // If non-zero, have been killed
   struct file *ofile[NOFILE];  // Open files
   struct inode *cwd;           // Current directory
-  char name[16];               // Process name (debugging)
+    char name[16];               // Process name (debugging)
+
     // A&T - start
   struct file *pagefile;             /* A&T pagefile file-descriptor */
   uint pagefile_addr[MAX_SWAP_PAGES];  /* A&T ADT to hold memory pages'
@@ -83,6 +84,8 @@ struct proc {
   int pages_in_mem;
   int swapped_pages;
 
+    int page_fault_count;
+    int total_swap_count;
     //A&T - end
 };
 

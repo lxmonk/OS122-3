@@ -31,6 +31,9 @@ exec(char *path, char **argv)
 
   proc->pages_in_mem = 0;
   proc->swapped_pages = 0;
+
+  proc->page_fault_count = 0;
+  proc->total_swap_count = 0;
   //A&T end
 
   if((ip = namei(path)) == 0)

@@ -92,6 +92,9 @@ found:
       K_DEBUG_PRINT(3,"memset done.", 999);
       p->pages_in_mem = 0;
       p->swapped_pages = 0;
+
+      p->page_fault_count = 0;
+      p->total_swap_count = 0;
   }
   K_DEBUG_PRINT(3, "returning p=%x", p);
   return p;
@@ -525,8 +528,12 @@ procdump(void)
     if(p->state >= 0 && p->state < NELEM(states) && states[p->state])
       state = states[p->state];
     else
-      state = "???";
-    cprintf("%d %s %s", p->pid, state, p->name);
+        state = "???";
+    if (not_shell_init())
+        cprintf("%d %s %d %d %d %d %s", p->pid, state,p->pages_in_mem,p->swapped_pages,p->page_fault_count,p->total_swap_count, p->name);
+    else
+        cprintf("%d %s %s", p->pid, state, p->name);
+
     if(p->state == SLEEPING){
       getcallerpcs((uint*)p->context->ebp+2, pc);
       for(i=0; i<10 && pc[i] != 0; i++)
@@ -566,6 +573,7 @@ void dec_swapped_pages_number(void) {
     proc->swapped_pages--;
 }
 void inc_swapped_pages_number(void) {
+    proc->total_swap_count++;
     proc->swapped_pages++;
 }
 int get_swapped_pages_number(void) {
