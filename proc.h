@@ -73,11 +73,16 @@ struct proc {
   char name[16];               // Process name (debugging)
     // A&T - start
   struct file *pagefile;             /* A&T pagefile file-descriptor */
-  uint pagefile_addr[MAX_SWAP_PAGES];       /* A&T ADT to hold memory pages'
-                               * offset in to the pagefile */
+  uint pagefile_addr[MAX_SWAP_PAGES];  /* A&T ADT to hold memory pages'
+                                        * offset in to the pagefile */
+  uint mempage_addr[MAX_PSYC_PAGES];
+  uint nfu_arr[MAX_PSYC_PAGES];
+  int next_to_swap;
+
   char pagefile_name[20];     /* name of swap pagefile. */
   int pages_in_mem;
-    int swapped_pages;
+  int swapped_pages;
+
     //A&T - end
 };
 

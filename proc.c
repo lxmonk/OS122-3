@@ -85,6 +85,10 @@ found:
       p->pagefile = swapfile_open(p->pagefile_name);
       K_DEBUG_PRINT(3,"pagefile %x",p->pagefile);
       memset(p->pagefile_addr, UNUSED_VA, sizeof(int) * MAX_SWAP_PAGES);
+      memset(p->mempage_addr, UNUSED_VA, sizeof(int) * MAX_PSYC_PAGES);
+      memset(p->nfu_arr, 0, sizeof(int) * MAX_PSYC_PAGES);
+      p->next_to_swap = 0;
+
       K_DEBUG_PRINT(3,"memset done.", 999);
       p->pages_in_mem = 0;
       p->swapped_pages = 0;
@@ -533,6 +537,16 @@ procdump(void)
 }
 
 
+uint get_fifo_va(void) {
+    uint va;
+
+    va = proc->mempage_addr[proc->next_to_swap];
+    proc->mempage_addr[proc->next_to_swap] = UNUSED_VA;
+    proc->next_to_swap++;
+    proc->next_to_swap %= MAX_PSYC_PAGES;
+    return va;
+}
+
 uint* get_pagefile_addr(void) {
     return proc->pagefile_addr;
 }
@@ -587,4 +601,20 @@ int not_sonof_shell_init() {
     K_DEBUG_PRINT(4,"not_shell_init: pid=%d, name=%s, ret=%d\n",
                   proc->parent->pid, proc->parent->name, ret);
     return ret;
+}
+
+int add_page_va(uint va) {
+    int i;
+
+    for(i = 0; i < MAX_PSYC_PAGES; i++) {
+        if (proc->mempage_addr[i] == UNUSED_VA)
+            break;
+    }
+
+    if (i == MAX_PSYC_PAGES)
+        panic("memory full trying to add to mempage_addr\n");
+
+    proc->mempage_addr[i] = va;
+    proc->nfu_arr[i] = 0;
+    return i;
 }

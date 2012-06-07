@@ -16,12 +16,11 @@ pde_t *kpgdir;  // for use in scheduler()
 struct segdesc gdt[NSEGS];
 
 /* A&T replacement algorithm */
-enum alg {RANDOM, FIFO, NFU, NONE};
+#define A_FIFO 0
+#define A_NFU 1
+#define A_NONE 2
+
 static int init_done = 0;	/* set to 1 once init is done */
-
-/* here will be a macro */
-static enum alg replacement_alg = RANDOM;
-
 
 
 // Set up CPU's kernel segment descriptors.
@@ -53,7 +52,7 @@ seginit(void)
 }
 /* A&T forward decl */
 int swap_in(pde_t *pgtab, uint pd_idx, pde_t *pde);
-uint  page_to_swap(pde_t *pgdir, enum alg replacement_alg);
+uint  page_to_swap(pde_t *pgdir);
 int swap_to_file(pde_t *pgdir);
 
 // Return the address of the PTE in page table pgdir
@@ -252,7 +251,20 @@ allocuvm(pde_t *pgdir, uint oldsz, uint newsz)
 {
   char *mem;
   uint a;
+  /* A&T */
+  int replacement_alg;
 
+  replacement_alg = A_NFU;
+
+#ifdef FIFO
+  replacement_alg = A_FIFO;
+#endif
+
+#ifdef NONE
+  replacement_alg = A_NONE;
+#endif
+
+  K_DEBUG_PRINT(2, "replacement_alg=%d", replacement_alg);
   if(newsz >= KERNBASE)
     return 0;
   if(newsz < oldsz)
@@ -261,9 +273,10 @@ allocuvm(pde_t *pgdir, uint oldsz, uint newsz)
   a = PGROUNDUP(oldsz);
   for(; a < newsz; a += PGSIZE) {
       K_DEBUG_PRINT(3,"a = %x, a/PGSIZE = %x",a,a/PGSIZE);
-      // max pages in psyc memory
+      // A&T max pages in psyc memory
       //      if ((a >= MAX_PSYC_MEM))
-      if ((get_mapped_pages_number() >= MAX_PSYC_PAGES))
+      if ((replacement_alg != A_NONE) &&
+          (get_mapped_pages_number() >= MAX_PSYC_PAGES))
           swap_to_file(pgdir);
       mem = kalloc();
       if(mem == 0){
@@ -273,7 +286,13 @@ allocuvm(pde_t *pgdir, uint oldsz, uint newsz)
       }
       memset(mem, 0, PGSIZE);
       mappages(pgdir, (char*)a, PGSIZE, v2p(mem), PTE_W|PTE_U);
-      inc_mapped_pages_number();
+      /* A&T  */
+      if (replacement_alg != A_NONE) {
+          add_page_va(PGROUNDDOWN(a));
+          inc_mapped_pages_number();
+      }
+      /* A&T  end */
+
   }
   return newsz;
 }
@@ -424,6 +443,8 @@ int swap_from_file(uint va) {
     pte_t *pte;
     int i;
 
+    /* panic("swap from file. don't panic.\n"); */
+
     K_DEBUG_PRINT(3, "inside. va=%x", va);
     va = PGROUNDDOWN((uint)va);
     K_DEBUG_PRINT(3, "round down  va=%x", va);
@@ -457,20 +478,41 @@ int swap_from_file(uint va) {
     *pte &= (~PTE_PG);		/* clear PTE_PG bit */
     *pte |= PTE_P;		/* set PTE_P bit */
     dec_swapped_pages_number();
+
+    add_page_va(va);
     return 0;
 }
 
-/* A&T TODO: implement replacement algo */
+/* A&T */
 
-uint page_to_swap(pde_t *pgdir, enum alg replacement_alg) {
+uint page_to_swap(pde_t *pgdir) {
     pde_t *pde;
     pte_t *pgtab;
     int pd_idx;
     int ptable_idx;
     uint  va;
+    int replacement_alg;
 
-    K_DEBUG_PRINT(3, "inside.", 999);
+    replacement_alg = A_NFU;
+
+#ifdef FIFO
+    replacement_alg = A_FIFO;
+#endif
+
+#ifdef NONE
+    replacement_alg = A_NONE;
+#endif
+
+    K_DEBUG_PRINT(3, "inside. replacement_alg = %d", replacement_alg);
+
+    if (replacement_alg == A_NONE)
+        return UNUSED_VA;
+
+    if (replacement_alg == A_FIFO)
+        return get_fifo_va();
+
     va=0;
+
     for (pd_idx = 0; pd_idx < NPDENTRIES; pd_idx++) {
         pde = &pgdir[pd_idx];
         if(*pde & PTE_P) {
@@ -487,7 +529,8 @@ uint page_to_swap(pde_t *pgdir, enum alg replacement_alg) {
             }
         }
     }
-    return -1;
+
+    return UNUSED_VA;
 }
 
 /* A&T
@@ -506,7 +549,10 @@ int swap_to_file(pde_t *pgdir) {
         return -1;
     if (get_swapped_pages_number() >= MAX_SWAP_PAGES)
         return -1;
-    va_page = page_to_swap(pgdir, replacement_alg);
+    if ((va_page = page_to_swap(pgdir)) == UNUSED_VA)
+        return -1;
+
+
 
     K_DEBUG_PRINT(3, "inside. va_page = %x", va_page);
 

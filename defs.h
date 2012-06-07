@@ -130,6 +130,8 @@ void inc_mapped_pages_number(void);
 int get_mapped_pages_number(void);
 int not_shell_init(void);
 pde_t*  get_pgdir();
+int add_page_va(uint);
+uint get_fifo_va(void);
 
 // swtch.S
 void            swtch(struct context**, struct context*);
@@ -205,4 +207,4 @@ int bring_from_swap(uint);
                                          __FILE__, __LINE__, __func__,	\
                                          __VA_ARGS__); } while (0)
 
-#define  T_A_DEBUG 0
+#define  T_A_DEBUG 2

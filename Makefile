@@ -67,6 +67,13 @@ QEMU = $(shell if which qemu > /dev/null; \
 	echo "***" 1>&2; exit 1)
 endif
 
+
+
+
+
+
+
+
 CC = $(TOOLPREFIX)gcc
 AS = $(TOOLPREFIX)gas
 LD = $(TOOLPREFIX)ld
@@ -78,6 +85,16 @@ CFLAGS += $(shell $(CC) -fno-stack-protector -E -x c /dev/null >/dev/null 2>&1 &
 ASFLAGS = -m32 -gdwarf-2 -Wa,-divide
 # FreeBSD ld wants ``elf_i386_fbsd''
 LDFLAGS += -m $(shell $(LD) -V | grep elf_i386 2>/dev/null)
+
+ifeq ($(SELECTION),FIFO)
+	# echo SELECTION = $(SELECTION);
+	CFLAGS += -DFIFO
+endif
+
+ifeq ($(SELECTION),NONE)
+	# echo SELECTION = $(SELECTION);
+	CFLAGS += -DNONE
+endif
 
 xv6.img: bootblock kernel fs.img
 	dd if=/dev/zero of=xv6.img count=10000

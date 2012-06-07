@@ -25,6 +25,10 @@ exec(char *path, char **argv)
   K_DEBUG_PRINT(3, "starting. path=%s", path);
 
   memset(proc->pagefile_addr, UNUSED_VA, sizeof(int) * MAX_SWAP_PAGES);
+  memset(proc->mempage_addr, UNUSED_VA, sizeof(int) * MAX_PSYC_PAGES);
+  memset(proc->nfu_arr, 0, sizeof(int) * MAX_PSYC_PAGES);
+  proc->next_to_swap = 0;
+
   proc->pages_in_mem = 0;
   proc->swapped_pages = 0;
   //A&T end
