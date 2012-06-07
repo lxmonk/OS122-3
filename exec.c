@@ -25,6 +25,7 @@ exec(char *path, char **argv)
   memset(proc->pagefile_addr, UNUSED_VA, sizeof(int) * MAX_SWAP_PAGES);
   proc->pages_in_mem = 0;
   proc->swapped_pages = 0;
+  //A&T end
 
   if((ip = namei(path)) == 0)
     return -1;

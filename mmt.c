@@ -14,15 +14,18 @@ int main(int argc, char *argv[])
 
     printf(2, "starting myMemTest\n");
     j = 123456;
-    for (i=0; i < 20; i++) {
+    for (i=0; i < 8; i++) {
         printf(2, "first loop. i=%d\n", i);
         pages[i] = (int*) malloc(PAGE_SIZE);
         memset(pages[i], 'z', PAGE_SIZE);
 
     }
 
-    for (i = 0; i <  1; i++) {
-        pages[i][10] = 99;
+    for (i = 0; i <  8; i++) {
+        pages[i][10] = 10;
+        pages[i][100] = 10;
+        pages[i][500] = 10;
+        pages[i][900] = 10;
         printf(2, "second loop. i=%d\n", i);
     }
 
