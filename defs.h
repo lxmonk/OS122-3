@@ -132,6 +132,8 @@ int not_shell_init(void);
 pde_t*  get_pgdir();
 int add_page_va(uint);
 uint get_fifo_va(void);
+struct proc* get_initproc();
+uint get_nfu_va();
 
 // swtch.S
 void            swtch(struct context**, struct context*);
@@ -197,7 +199,7 @@ void            clearpteu(pde_t *pgdir, char *uva);
 /* A&T */
 void set_init_done(void);
 int bring_from_swap(uint);
-
+int update_nfu_arr(pde_t*,uint*,uint*);
 // number of elements in fixed-size array
 #define NELEM(x) (sizeof(x)/sizeof((x)[0]))
 
@@ -207,4 +209,4 @@ int bring_from_swap(uint);
                                          __FILE__, __LINE__, __func__,	\
                                          __VA_ARGS__); } while (0)
 
-#define  T_A_DEBUG 2
+#define  T_A_DEBUG 0

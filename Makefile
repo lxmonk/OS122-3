@@ -144,7 +144,7 @@ kernelmemfs: $(MEMFSOBJS) entry.o entryother initcode fs.img
 	$(OBJDUMP) -t kernelmemfs | sed '1,/SYMBOL TABLE/d; s/ .* / /; /^$$/d' > kernelmemfs.sym
 
 tags: $(OBJS) entryother.S _init
-	etags *.S *.c
+	etags *. *.c
 
 vectors.S: vectors.pl
 	perl vectors.pl > vectors.S

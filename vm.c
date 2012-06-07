@@ -486,11 +486,6 @@ int swap_from_file(uint va) {
 /* A&T */
 
 uint page_to_swap(pde_t *pgdir) {
-    pde_t *pde;
-    pte_t *pgtab;
-    int pd_idx;
-    int ptable_idx;
-    uint  va;
     int replacement_alg;
 
     replacement_alg = A_NFU;
@@ -511,26 +506,28 @@ uint page_to_swap(pde_t *pgdir) {
     if (replacement_alg == A_FIFO)
         return get_fifo_va();
 
-    va=0;
+    return get_nfu_va();
 
-    for (pd_idx = 0; pd_idx < NPDENTRIES; pd_idx++) {
-        pde = &pgdir[pd_idx];
-        if(*pde & PTE_P) {
-            pgtab = (pte_t*)p2v(PTE_ADDR(*pde));
-            for (ptable_idx = 6; ptable_idx < NPDENTRIES; ptable_idx++) {
-                if(pgtab[ptable_idx] & PTE_P) {
-                    /* va = (*pde << PDXSHIFT); */
-                    /* va |= (*pgtab << PTXSHIFT); */
-                    va = PGADDR(pd_idx, ptable_idx, 0);
-                    K_DEBUG_PRINT(3, "pde_idx= %d,ptable_idx = %d, va=%x .",pd_idx,ptable_idx,va);
-                    K_DEBUG_PRINT(5, "pde = %x,pgtab = %x",*pde,*pgtab);
-                    return va;
-                }
-            }
-        }
-    }
+    /* va=0; */
 
-    return UNUSED_VA;
+    /* for (pd_idx = 0; pd_idx < NPDENTRIES; pd_idx++) { */
+    /*     pde = &pgdir[pd_idx]; */
+    /*     if(*pde & PTE_P) { */
+    /*         pgtab = (pte_t*)p2v(PTE_ADDR(*pde)); */
+    /*         for (ptable_idx = 0; ptable_idx < NPDENTRIES; ptable_idx++) { */
+    /*             if(pgtab[ptable_idx] & PTE_P) { */
+    /*                 /\* va = (*pde << PDXSHIFT); *\/ */
+    /*                 /\* va |= (*pgtab << PTXSHIFT); *\/ */
+    /*                 va = PGADDR(pd_idx, ptable_idx, 0); */
+    /*                 K_DEBUG_PRINT(3, "pde_idx= %d,ptable_idx = %d, va=%x .",pd_idx,ptable_idx,va); */
+    /*                 K_DEBUG_PRINT(5, "pde = %x,pgtab = %x",*pde,*pgtab); */
+    /*                 return va; */
+    /*             } */
+    /*         } */
+        /* } */
+    /* } */
+
+    /* return UNUSED_VA; */
 }
 
 /* A&T
@@ -591,5 +588,26 @@ int bring_from_swap(uint va) {
     pde = get_pgdir();
     swap_to_file(pde);
     swap_from_file(va);
+    return 0;
+}
+// A&T update the nfu array
+int update_nfu_arr(pde_t* pgdir,uint* addr_arry,uint* nfu_arr)
+{
+    int i;
+    pte_t *pgtab;
+
+    for(i=0; i < MAX_PSYC_PAGES;i++) {
+        nfu_arr[i] >>= 1; //right shift by 1
+        if ((addr_arry[i] != UNUSED_VA) &&
+            ((pgtab = walkpgdir(pgdir,(char*)addr_arry[i],0)) != 0) &&
+            (*pgtab & PTE_A)) {
+
+            K_DEBUG_PRINT(2,"pte %x is used",(int)pgtab);
+            *pgtab &= ~(PTE_A); //clear the bit
+            nfu_arr[i] |= (1 << 31); //0x80000000 (add 1 to the MSB)
+        }
+    }
+
+    K_DEBUG_PRINT(2,"inside",999);
     return 0;
 }

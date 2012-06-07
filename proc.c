@@ -618,3 +618,34 @@ int add_page_va(uint va) {
     proc->nfu_arr[i] = 0;
     return i;
 }
+
+struct proc* get_initproc() {
+    return initproc;
+}
+
+uint get_nfu_va() {
+    int i;
+    uint min_val;
+    int min_idx;
+    uint va;
+
+    for(i=0;i < MAX_PSYC_PAGES;i++) {
+        if (proc->mempage_addr[i] != UNUSED_VA)
+            break;
+    }
+    if (i == MAX_PSYC_PAGES)
+        panic("get_nfu_va: empty address array");
+    min_idx = i;
+    min_val = proc->nfu_arr[i];
+    for(;i < MAX_PSYC_PAGES;i++) {
+        if ((proc->mempage_addr[i] != UNUSED_VA) &&
+            (proc->nfu_arr[i] < min_val)) {
+            min_idx = i;
+            min_val = proc->nfu_arr[i];
+        }
+    }
+    va = proc->mempage_addr[min_idx];
+    proc->mempage_addr[min_idx] = UNUSED_VA;
+    return va;
+
+}

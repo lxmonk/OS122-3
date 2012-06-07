@@ -51,6 +51,12 @@ trap(struct trapframe *tf)
     if(cpu->id == 0){
       acquire(&tickslock);
       ticks++;
+#ifndef FIFO
+#ifndef NONE
+      if ((proc != 0) && (proc != get_initproc()) && (proc->pid > 2))
+            update_nfu_arr(proc->pgdir,proc->mempage_addr,proc->nfu_arr);
+#endif
+#endif
       wakeup(&ticks);
       release(&tickslock);
     }
