@@ -454,7 +454,8 @@ int swap_from_file(uint va) {
     }
     //not found in file
     if (i == MAX_SWAP_PAGES)
-        panic("swap_from_file: page not in swap");
+        panic("swap_from_file: page not in swap"); /* A&T FIXME */
+        /* return -1; */
 
     f = get_pagefile();
     set_f_offset(f, ((uint)i * PGSIZE));
@@ -505,26 +506,6 @@ uint page_to_swap(pde_t *pgdir) {
 
     return get_nfu_va();
 
-    /* va=0; */
-
-    /* for (pd_idx = 0; pd_idx < NPDENTRIES; pd_idx++) { */
-    /*     pde = &pgdir[pd_idx]; */
-    /*     if(*pde & PTE_P) { */
-    /*         pgtab = (pte_t*)p2v(PTE_ADDR(*pde)); */
-    /*         for (ptable_idx = 0; ptable_idx < NPDENTRIES; ptable_idx++) { */
-    /*             if(pgtab[ptable_idx] & PTE_P) { */
-    /*                 /\* va = (*pde << PDXSHIFT); *\/ */
-    /*                 /\* va |= (*pgtab << PTXSHIFT); *\/ */
-    /*                 va = PGADDR(pd_idx, ptable_idx, 0); */
-    /*                 K_DEBUG_PRINT(3, "pde_idx= %d,ptable_idx = %d, va=%x .",pd_idx,ptable_idx,va); */
-    /*                 K_DEBUG_PRINT(5, "pde = %x,pgtab = %x",*pde,*pgtab); */
-    /*                 return va; */
-    /*             } */
-    /*         } */
-        /* } */
-    /* } */
-
-    /* return UNUSED_VA; */
 }
 
 /* A&T
@@ -558,6 +539,9 @@ int swap_to_file(pde_t *pgdir) {
             break;
         }
     }
+
+    if (i == MAX_SWAP_PAGES)
+        panic("swap_to_file: swap file is full");
     // f = swap file
     f = get_pagefile();
     set_f_offset(f, ((uint)i * PGSIZE));

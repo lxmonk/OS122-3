@@ -85,7 +85,7 @@ trap(struct trapframe *tf)
     break;
 
   case T_PGFLT:
-      cprintf("********************page fault!!********************\n");
+      cprintf("********************page fault!! %x ********************\n", rcr2());
       bring_from_swap(rcr2());
       proc->page_fault_count++;
       break;

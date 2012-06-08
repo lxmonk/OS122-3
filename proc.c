@@ -83,7 +83,8 @@ found:
       itoa(p->pid, &p->pagefile_name[5]);
 
       /* A&T open the pagefile and save the fd */
-      p->pagefile = swapfile_open(p->pagefile_name);
+      p->pagefile =
+          swapfile_open(p->pagefile_name);
       K_DEBUG_PRINT(3,"pagefile %x",p->pagefile);
       memset(p->pagefile_addr, UNUSED_VA, sizeof(int) * MAX_SWAP_PAGES);
       memset(p->mempage_addr, UNUSED_VA, sizeof(int) * MAX_PSYC_PAGES);
@@ -198,15 +199,31 @@ fork(void)
       np->swapped_pages = proc->swapped_pages;
       np->pages_in_mem = proc->pages_in_mem;
       /* A&T create the file name for swapping out */
-      memmove(proc->pagefile_addr,np->pagefile_addr,MAX_SWAP_PAGES);
-      memmove(proc->mempage_addr, np->mempage_addr, MAX_PSYC_PAGES);
-      memmove(proc->nfu_arr, np->nfu_arr, MAX_PSYC_PAGES);
+      for (i = 0; i < MAX_SWAP_PAGES; i++) {
+          K_DEBUG_PRINT(2, "(before)proc->pagefile_addr[%d]=%x, np->pagefile_addr[%d]=%x",
+                        i, proc->pagefile_addr[i], i, np->pagefile_addr[i]);
+          K_DEBUG_PRINT(2, "(before)proc->mempage_addr[%d]=%x, np->mempage_addr[%d]=%x",
+                        i, proc->mempage_addr[i], i, np->mempage_addr[i]);
+      }
+
+      memmove(np->pagefile_addr,proc->pagefile_addr, sizeof(uint) * MAX_SWAP_PAGES);
+      memmove(np->mempage_addr, proc->mempage_addr, sizeof(uint) * MAX_PSYC_PAGES);
+      memmove(np->nfu_arr, proc->nfu_arr, sizeof(uint) * MAX_PSYC_PAGES);
+      for (i = 0; i < MAX_SWAP_PAGES; i++) {
+          K_DEBUG_PRINT(2, "proc->pagefile_addr[%d]=%x, np->pagefile_addr[%d]=%x",
+                        i, proc->pagefile_addr[i], i, np->pagefile_addr[i]);
+          K_DEBUG_PRINT(2, "(after)proc->mempage_addr[%d]=%x, np->mempage_addr[%d]=%x",
+                        i, proc->mempage_addr[i], i, np->mempage_addr[i]);
+      }
+
+      /* for (i=0; i < 10000; i++) */
+      /*     K_DEBUG_PRINT(2," ",999); */
       np->next_to_swap = proc->next_to_swap;
-      np->pagefile = swapfile_open(np->pagefile_name);
+      /* np->pagefile = swapfile_open(np->pagefile_name); */
       np->page_fault_count = 0;
       np->total_swap_count = 0;
 
-      K_DEBUG_PRINT(2,"proc: pagefile = %x, name = %s , pid = %d. np->pagefile = %x",
+      K_DEBUG_PRINT(3,"proc: pagefile = %x, name = %s , pid = %d. np->pagefile = %x",
                     proc->pagefile,proc->name,proc->pid, np->pagefile);
       if ((proc->pagefile != 0) && (np->pagefile != 0)) {
           char pagebuffer[1024] /* = (char*)v2p(kalloc()) */;
@@ -690,12 +707,20 @@ uint get_nfu_va() {
     int min_idx;
     uint va;
 
+
+
     for(i=0;i < MAX_PSYC_PAGES;i++) {
         if (proc->mempage_addr[i] != UNUSED_VA)
             break;
     }
-    if (i == MAX_PSYC_PAGES)
-        panic("get_nfu_va: empty address array");
+    if (i == MAX_PSYC_PAGES){
+        for (i = 0; i < MAX_SWAP_PAGES; i++) {
+            K_DEBUG_PRINT(2, "PANIC: proc->mempage_addr[%d]=%x", i, proc->mempage_addr[i]);
+        }
+        /* panic("get_nfu_va: empty address array"); */ /* A&T FIXME!! */
+        return 999;
+    }
+
     min_idx = i;
     min_val = proc->nfu_arr[i];
     for(;i < MAX_PSYC_PAGES;i++) {
