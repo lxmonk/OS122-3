@@ -197,11 +197,15 @@ void            switchkvm(void);
 int             copyout(pde_t*, uint, void*, uint);
 void            clearpteu(pde_t *pgdir, char *uva);
 /* A&T */
-void set_init_done(void);
-int bring_from_swap(uint);
-int update_nfu_arr(pde_t*,uint*,uint*);
+void            set_init_done(void);
+int             bring_from_swap(uint);
+int             update_nfu_arr(pde_t*,uint*,uint*);
+int             map_swap_pages(pde_t*, void*, uint, int);
+
+
 // number of elements in fixed-size array
 #define NELEM(x) (sizeof(x)/sizeof((x)[0]))
+
 
 /* A&T DEBUG PRINT */
 #define K_DEBUG_PRINT(level, fmt, ...)					\
@@ -209,4 +213,4 @@ int update_nfu_arr(pde_t*,uint*,uint*);
                                          __FILE__, __LINE__, __func__,	\
                                          __VA_ARGS__); } while (0)
 
-#define  T_A_DEBUG 0
+#define  T_A_DEBUG 2

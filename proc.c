@@ -7,6 +7,7 @@
 #include "proc.h"
 #include "spinlock.h"
 
+#define TOT_PAGES 134218	/* A&T: 512GiB / 4 KB = 134218 */
 
 
 struct {
@@ -192,31 +193,42 @@ fork(void)
   safestrcpy(np->name, proc->name, sizeof(proc->name));
 
   //A&T start
-  if (not_shell_init() && not_sonof_shell_init() && (proc->pagefile != 0)) {
+  if ((proc != 0) && (proc != get_initproc()) && (proc->pid > 2) &&
+      (np->pid > 2) && (proc->pagefile != 0)) {
       np->swapped_pages = proc->swapped_pages;
       np->pages_in_mem = proc->pages_in_mem;
       /* A&T create the file name for swapping out */
       memmove(proc->pagefile_addr,np->pagefile_addr,MAX_SWAP_PAGES);
+      memmove(proc->mempage_addr, np->mempage_addr, MAX_PSYC_PAGES);
+      memmove(proc->nfu_arr, np->nfu_arr, MAX_PSYC_PAGES);
+      np->next_to_swap = proc->next_to_swap;
       np->pagefile = swapfile_open(np->pagefile_name);
-      K_DEBUG_PRINT(3,"pagefile = %x, name = %s , pid = %d",proc->pagefile,proc->name,proc->pid);
-      /* if ((proc->pagefile != 0) && (np->pagefile != 0)) { */
-      /*     char pagebuffer[PGSIZE]; */
+      np->page_fault_count = 0;
+      np->total_swap_count = 0;
 
-      /*     for(i = 0; i < MAX_SWAP_PAGES;i++) { */
-      /*         K_DEBUG_PRINT(3,"copying pagefile proc->pagefile = %x",proc->pagefile); */
-      /*         set_f_offset(proc->pagefile,i*PGSIZE); */
-      /*         set_f_offset(np->pagefile,i*PGSIZE); */
-      /*         panic("fork: inside poisonous loope\n"); */
-      /*         if (fileread(proc->pagefile,pagebuffer,1) < 0) */
-      /*             panic("fork: unable to read from parent swap file\n"); */
-      /*         if (filewrite(np->pagefile,pagebuffer,PGSIZE) < 0) */
-      /*             panic("fork: unable to write to child swap file\n"); */
-      /*     } */
-      /* } else { */
-      /*     K_DEBUG_PRINT(3, "not copying pagefile. proc->pagefile=%x, proc->pid=%d, " */
-      /*                   "np->pagefile=%x, np->pid=%d", proc->pagefile, proc->pid, */
-      /*                   np->pagefile, np->pid); */
-      /* } */
+      K_DEBUG_PRINT(2,"proc: pagefile = %x, name = %s , pid = %d. np->pagefile = %x",
+                    proc->pagefile,proc->name,proc->pid, np->pagefile);
+      if ((proc->pagefile != 0) && (np->pagefile != 0)) {
+          /* char pagebuffer[PGSIZE]; */
+
+          for(i = 0; i < MAX_SWAP_PAGES;i++) {
+              K_DEBUG_PRINT(2,"copying pagefile proc->pagefile = %x",proc->pagefile);
+              /* set_f_offset(proc->pagefile,i*PGSIZE); */
+              /* set_f_offset(np->pagefile,i*PGSIZE); */
+              K_DEBUG_PRINT(2, "proc->pagefile = %x, np->pagefile = %x",
+                            proc->pagefile, np->pagefile);
+              /* panic("fork: inside poisonous loop\n"); */
+              /* if (fileread(proc->pagefile,pagebuffer,1) < 0) */
+              /*     panic("fork: unable to read from parent swap file\n"); */
+              /* if (filewrite(np->pagefile,pagebuffer,PGSIZE) < 0) */
+              /*     panic("fork: unable to write to child swap file\n"); */
+          }
+              /* panic("fork: after poisonous loop\n"); */
+      } else {
+          K_DEBUG_PRINT(3, "not copying pagefile. proc->pagefile=%x, proc->pid=%d, "
+                        "np->pagefile=%x, np->pid=%d", proc->pagefile, proc->pid,
+                        np->pagefile, np->pid);
+      }
    }
 
   return pid;
@@ -230,10 +242,39 @@ exit(void)
 {
   struct proc *p;
   int fd;
+#ifdef VERBOSE_PRINT            /* A&T */
+  static char *states[] = {
+      [UNUSED]    "unused",
+      [EMBRYO]    "embryo",
+      [SLEEPING]  "sleep ",
+      [RUNNABLE]  "runble",
+      [RUNNING]   "run   ",
+      [ZOMBIE]    "zombie"
+  };
+  char *state;
+
+#endif
+
 
   if(proc == initproc)
     panic("init exiting");
 
+  /* A&T print proc data if VERBOSE_PRINT == TRUE */
+#ifdef VERBOSE_PRINT
+  if ((proc->pid > 2) &&	/* A&T not shell nor init */
+      !((proc->name[0] == 's') && (proc->name[1] == 'h') &&
+        (proc->name[2] == 0))) {
+      if(proc->state >= 0 && proc->state < NELEM(states) && states[proc->state])
+          state = states[proc->state];
+      else
+          state = "???";
+      cprintf("%d %s %d %d %d %d %s\n", proc->pid, state, proc->pages_in_mem,
+              proc->swapped_pages, proc->page_fault_count,
+              proc->total_swap_count, proc->name);
+  }
+#else
+  cprintf("no verbose_print\n");
+#endif
   // Close all open files.
   for(fd = 0; fd < NOFILE; fd++){
     if(proc->ofile[fd]){
@@ -522,6 +563,8 @@ procdump(void)
   char *state;
   uint pc[10];
 
+  int used_pages = 0;		/* A&T used pages counter */
+
   for(p = ptable.proc; p < &ptable.proc[NPROC]; p++){
     if(p->state == UNUSED)
       continue;
@@ -529,9 +572,14 @@ procdump(void)
       state = states[p->state];
     else
         state = "???";
-    if (not_shell_init())
-        cprintf("%d %s %d %d %d %d %s", p->pid, state,p->pages_in_mem,p->swapped_pages,p->page_fault_count,p->total_swap_count, p->name);
-    else
+    if ((p->pid > 2) &&	/* A&T not shell nor init */
+        !((p->name[0] == 's') && (p->name[1] == 'h') &&
+          (p->name[2] == 0))) {
+        cprintf("%d %s %d %d %d %d %s", p->pid, state, p->pages_in_mem,
+                p->swapped_pages, p->page_fault_count, p->total_swap_count,
+                p->name);
+        used_pages += p->pages_in_mem;
+    } else
         cprintf("%d %s %s", p->pid, state, p->name);
 
     if(p->state == SLEEPING){
@@ -541,6 +589,9 @@ procdump(void)
     }
     cprintf("\n");
   }
+
+  cprintf("%d\% free pages in the system.\n",
+          ((100 * ((TOT_PAGES) - (used_pages))) / (TOT_PAGES)));
 }
 
 

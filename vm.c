@@ -71,17 +71,6 @@ walkpgdir(pde_t *pgdir, const void *va, int alloc)
   } else {
       if(!alloc || (pgtab = (pte_t*)kalloc()) == 0)
           return 0;
-
-    /* A&T should we swap another page? */
-      /* if (init_done && not_shell_init() && */
-      /*     (get_mapped_pages_number() == MAX_PSYC_PAGES)) { */
-      /*   cprintf("get_mapped_pages_number() == MAX_PSYC_PAGES\n"); */
-      /*   page = page_to_swap(pgdir, replacement_alg); */
-      /*   swap_to_file(page, pgdir); */
-      /* } else if (init_done && not_shell_init()) { */
-      /*     inc_mapped_pages_number(); */
-      /* }   /\* A&T end *\/ */
-
       // Make sure all those PTE_P bits are zero.
       memset(pgtab, 0, PGSIZE);
       // The permissions here are overly generous, but they can
@@ -373,15 +362,21 @@ copyuvm(pde_t *pgdir, uint sz)
     return 0;
   for(i = 0; i < sz; i += PGSIZE){
     if((pte = walkpgdir(pgdir, (void *) i, 0)) == 0)
-      panic("copyuvm: pte should exist");
-    if(!(*pte & PTE_P))
-      panic("copyuvm: page not present");
-    pa = PTE_ADDR(*pte);
-    if((mem = kalloc()) == 0)
-      goto bad;
-    memmove(mem, (char*)p2v(pa), PGSIZE);
-    if(mappages(d, (void*)i, PGSIZE, v2p(mem), PTE_W|PTE_U) < 0)
-      goto bad;
+        panic("copyuvm: pte should exist");
+    if(!(*pte & PTE_P) && !(*pte & PTE_PG)) /* A&T added PTE_PG check */
+        panic("copyuvm: page not present");
+    /* A&T */
+    if (*pte & PTE_PG) {
+        if (map_swap_pages(d, (void*)i, PGSIZE, PTE_W|PTE_U) < 0)
+            goto bad;
+    } else {
+        pa = PTE_ADDR(*pte);
+        if((mem = kalloc()) == 0)
+            goto bad;
+        memmove(mem, (char*)p2v(pa), PGSIZE);
+        if(mappages(d, (void*)i, PGSIZE, v2p(mem), PTE_W|PTE_U) < 0)
+            goto bad;
+    }
   }
   return d;
 
@@ -610,5 +605,27 @@ int update_nfu_arr(pde_t* pgdir,uint* addr_arry,uint* nfu_arr)
     }
 
     K_DEBUG_PRINT(2,"inside",999);
+    return 0;
+}
+
+int
+map_swap_pages(pde_t *pgdir, void *va, uint size, int perm)
+{
+    char *a, *last;
+    pte_t *pte;
+
+    a = (char*)PGROUNDDOWN((uint)va);
+    last = (char*)PGROUNDDOWN(((uint)va) + size - 1);
+    for(;;){
+        if((pte = walkpgdir(pgdir, a, 1)) == 0)
+            return -1;
+        if((*pte & PTE_P) || (*pte & PTE_PG))
+            panic("remap");
+
+        *pte = perm | PTE_PG; /* A&T PTE_PG instead of PTE_P */
+        if(a == last)
+            break;
+        a += PGSIZE;
+    }
     return 0;
 }
