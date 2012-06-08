@@ -209,21 +209,23 @@ fork(void)
       K_DEBUG_PRINT(2,"proc: pagefile = %x, name = %s , pid = %d. np->pagefile = %x",
                     proc->pagefile,proc->name,proc->pid, np->pagefile);
       if ((proc->pagefile != 0) && (np->pagefile != 0)) {
-          /* char pagebuffer[PGSIZE]; */
+          char pagebuffer[1024] /* = (char*)v2p(kalloc()) */;
 
-          for(i = 0; i < MAX_SWAP_PAGES;i++) {
-              K_DEBUG_PRINT(2,"copying pagefile proc->pagefile = %x",proc->pagefile);
+          for(i = 0; i < MAX_SWAP_PAGES /* *PGSIZE */; i++) {
+              /* panic("fork: inside poisonous loop\n"); */
+              K_DEBUG_PRINT(3,"copying pagefile proc->pagefile = %x",proc->pagefile);
               /* set_f_offset(proc->pagefile,i*PGSIZE); */
               /* set_f_offset(np->pagefile,i*PGSIZE); */
-              K_DEBUG_PRINT(2, "proc->pagefile = %x, np->pagefile = %x",
+              K_DEBUG_PRINT(3, "proc->pagefile = %x, np->pagefile = %x",
                             proc->pagefile, np->pagefile);
-              /* panic("fork: inside poisonous loop\n"); */
-              /* if (fileread(proc->pagefile,pagebuffer,1) < 0) */
-              /*     panic("fork: unable to read from parent swap file\n"); */
-              /* if (filewrite(np->pagefile,pagebuffer,PGSIZE) < 0) */
-              /*     panic("fork: unable to write to child swap file\n"); */
+              if (off_fileread(proc->pagefile, pagebuffer, 1024/* PGSIZE */, i*1024) < 0)
+                  panic("fork: unable to read from parent swap file\n");
+              if (off_filewrite(np->pagefile,pagebuffer, 1024/* PGSIZE */, i*1024) < 0)
+                  panic("fork: unable to write to child swap file\n");
           }
-              /* panic("fork: after poisonous loop\n"); */
+
+          /* kfree(p2v((uint)pagebuffer)); */
+          /* panic("fork: after poisonous loop\n"); */
       } else {
           K_DEBUG_PRINT(3, "not copying pagefile. proc->pagefile=%x, proc->pid=%d, "
                         "np->pagefile=%x, np->pid=%d", proc->pagefile, proc->pid,

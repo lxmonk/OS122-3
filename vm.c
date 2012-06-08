@@ -365,16 +365,18 @@ copyuvm(pde_t *pgdir, uint sz)
         panic("copyuvm: pte should exist");
     if(!(*pte & PTE_P) && !(*pte & PTE_PG)) /* A&T added PTE_PG check */
         panic("copyuvm: page not present");
+    if ((*pte & PTE_PG) && (*pte & PTE_P)) /* A&T */
+        panic("copyuvm: PTE_PG & PTE_P");
     /* A&T */
-    if (*pte & PTE_PG) {
-        if (map_swap_pages(d, (void*)i, PGSIZE, PTE_W|PTE_U) < 0)
-            goto bad;
-    } else {
+    if ((*pte & PTE_P) && (!(*pte & PTE_PG))) {
         pa = PTE_ADDR(*pte);
         if((mem = kalloc()) == 0)
             goto bad;
         memmove(mem, (char*)p2v(pa), PGSIZE);
         if(mappages(d, (void*)i, PGSIZE, v2p(mem), PTE_W|PTE_U) < 0)
+            goto bad;
+    } else {			/* A&T PTE_PG */
+        if (map_swap_pages(d, (void*)i, PGSIZE, PTE_W|PTE_U) < 0)
             goto bad;
     }
   }
@@ -440,9 +442,9 @@ int swap_from_file(uint va) {
 
     /* panic("swap from file. don't panic.\n"); */
 
-    K_DEBUG_PRINT(3, "inside. va=%x", va);
+    K_DEBUG_PRINT(2, "inside. va=%x", va);
     va = PGROUNDDOWN((uint)va);
-    K_DEBUG_PRINT(3, "round down  va=%x", va);
+    K_DEBUG_PRINT(2, "round down  va=%x", va);
     pfile_va_arr = get_pagefile_addr();
     for (i = 0; i < MAX_SWAP_PAGES; i++) {
         if (pfile_va_arr[i] == va) {
@@ -452,7 +454,7 @@ int swap_from_file(uint va) {
     }
     //not found in file
     if (i == MAX_SWAP_PAGES)
-        panic("swap_from_file : page not in swap");
+        panic("swap_from_file: page not in swap");
 
     f = get_pagefile();
     set_f_offset(f, ((uint)i * PGSIZE));
@@ -546,7 +548,7 @@ int swap_to_file(pde_t *pgdir) {
 
 
 
-    K_DEBUG_PRINT(3, "inside. va_page = %x", va_page);
+    K_DEBUG_PRINT(2, "***inside. va_page = %x", va_page);
 
     pagefile_addr = get_pagefile_addr();
     for (i = 0; i < MAX_SWAP_PAGES; i++) {

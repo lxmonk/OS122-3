@@ -161,3 +161,65 @@ filewrite(struct file *f, char *addr, int n)
 void set_f_offset(struct file *f, uint new_off) {
     f->off = new_off;
 }
+
+// A&T Read from file f.
+int
+off_fileread(struct file *f, char *addr, int n, int offset)
+{
+
+  if(f->readable == 0)
+    return -1;
+  if(f->type == FD_PIPE)
+    return piperead(f->pipe, addr, n);
+  if(f->type == FD_INODE){
+    ilock(f->ip);
+    readi(f->ip, addr, offset, n);
+    iunlock(f->ip);
+    return n;
+  }
+  panic("off_fileread");
+}
+
+//PAGEBREAK!
+// Write to file f.
+int
+off_filewrite(struct file *f, char *addr, int n, int offset)
+{
+    int r;
+
+  K_DEBUG_PRINT(4,"f->type = %d , f= %x",f->type,f);
+  if(f->writable == 0)
+    return -1;
+  if(f->type == FD_PIPE)
+    return pipewrite(f->pipe, addr, n);
+  if(f->type == FD_INODE){
+    // write a few blocks at a time to avoid exceeding
+    // the maximum log transaction size, including
+    // i-node, indirect block, allocation blocks,
+    // and 2 blocks of slop for non-aligned writes.
+    // this really belongs lower down, since writei()
+    // might be writing a device like the console.
+    int max = ((LOGSIZE-1-1-2) / 2) * 512;
+    int i = 0;
+    while(i < n){
+      int n1 = n - i;
+      if(n1 > max)
+        n1 = max;
+
+      begin_trans();
+      ilock(f->ip);
+      if ((r = writei(f->ip, addr + i, offset, n1)) > 0)
+        offset += r;
+      iunlock(f->ip);
+      commit_trans();
+
+      if(r < 0)
+        break;
+      if(r != n1)
+        panic("short off_filewrite");
+      i += r;
+    }
+    return i == n ? n : -1;
+  }
+  panic("off_filewrite");
+}

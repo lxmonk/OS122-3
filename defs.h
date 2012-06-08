@@ -29,8 +29,10 @@ void            fileclose(struct file*);
 struct file*    filedup(struct file*);
 void            fileinit(void);
 int             fileread(struct file*, char*, int n);
+int             off_fileread(struct file*, char*, int, int); /* A&T */
 int             filestat(struct file*, struct stat*);
 int             filewrite(struct file*, char*, int n);
+int             off_filewrite(struct file*, char*, int, int); /* A&T */
 
 /* A&T */
 void            set_f_offset(struct file*, uint);
