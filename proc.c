@@ -7,7 +7,7 @@
 #include "proc.h"
 #include "spinlock.h"
 
-#define TOT_PAGES 134218	/* A&T: 512GiB / 4 KB = 134218 */
+#define TOT_PAGES 134218	/* A&T: 512 MiB / 4 KB = 134218 */
 
 
 struct {
@@ -169,47 +169,24 @@ fork(void)
   }
 
   K_DEBUG_PRINT(4, "after np = allocproc(). np = %x", np);
-  // Copy process state from p.
-  if((np->pgdir = copyuvm(proc->pgdir, proc->sz)) == 0){
-    kfree(np->kstack);
-    np->kstack = 0;
-    np->state = UNUSED;
-    return -1;
-  }
-  np->sz = proc->sz;
-  np->parent = proc;
-  *np->tf = *proc->tf;
 
-  // Clear %eax so that fork returns 0 in the child.
-  np->tf->eax = 0;
-  K_DEBUG_PRINT(3,"pagefile = %x",proc->pagefile);
-
-  for(i = 0; i < NOFILE; i++)
-    if(proc->ofile[i])
-      np->ofile[i] = filedup(proc->ofile[i]);
-  np->cwd = idup(proc->cwd);
-
-  pid = np->pid;
-  np->state = RUNNABLE;
-  safestrcpy(np->name, proc->name, sizeof(proc->name));
-
-  //A&T start
+    //A&T start
   if ((proc != 0) && (proc != get_initproc()) && (proc->pid > 2) &&
       (np->pid > 2) && (proc->pagefile != 0)) {
       np->swapped_pages = proc->swapped_pages;
       np->pages_in_mem = proc->pages_in_mem;
       /* A&T create the file name for swapping out */
       for (i = 0; i < MAX_SWAP_PAGES; i++) {
-          K_DEBUG_PRINT(2, "(before)proc->pagefile_addr[%d]=%x, np->pagefile_addr[%d]=%x",
+          K_DEBUG_PRINT(3, "(before)proc->pagefile_addr[%d]=%x, np->pagefile_addr[%d]=%x",
                         i, proc->pagefile_addr[i], i, np->pagefile_addr[i]);
-          K_DEBUG_PRINT(2, "(before)proc->mempage_addr[%d]=%x, np->mempage_addr[%d]=%x",
+          K_DEBUG_PRINT(3, "(before)proc->mempage_addr[%d]=%x, np->mempage_addr[%d]=%x",
                         i, proc->mempage_addr[i], i, np->mempage_addr[i]);
       }
 
       memmove(np->pagefile_addr,proc->pagefile_addr, sizeof(uint) * MAX_SWAP_PAGES);
       memmove(np->mempage_addr, proc->mempage_addr, sizeof(uint) * MAX_PSYC_PAGES);
       memmove(np->nfu_arr, proc->nfu_arr, sizeof(uint) * MAX_PSYC_PAGES);
-      for (i = 0; i < MAX_SWAP_PAGES; i++) {
+      for (i = 0; i < MAX_PSYC_PAGES; i++) {
           K_DEBUG_PRINT(2, "proc->pagefile_addr[%d]=%x, np->pagefile_addr[%d]=%x",
                         i, proc->pagefile_addr[i], i, np->pagefile_addr[i]);
           K_DEBUG_PRINT(2, "(after)proc->mempage_addr[%d]=%x, np->mempage_addr[%d]=%x",
@@ -248,7 +225,31 @@ fork(void)
                         "np->pagefile=%x, np->pid=%d", proc->pagefile, proc->pid,
                         np->pagefile, np->pid);
       }
-   }
+  }
+  /* A&T end */
+  // Copy process state from p.
+  if((np->pgdir = copyuvm(proc->pgdir, proc->sz)) == 0){
+    kfree(np->kstack);
+    np->kstack = 0;
+    np->state = UNUSED;
+    return -1;
+  }
+  np->sz = proc->sz;
+  np->parent = proc;
+  *np->tf = *proc->tf;
+
+  // Clear %eax so that fork returns 0 in the child.
+  np->tf->eax = 0;
+  K_DEBUG_PRINT(3,"pagefile = %x",proc->pagefile);
+
+  for(i = 0; i < NOFILE; i++)
+    if(proc->ofile[i])
+      np->ofile[i] = filedup(proc->ofile[i]);
+  np->cwd = idup(proc->cwd);
+
+  pid = np->pid;
+  np->state = RUNNABLE;
+  safestrcpy(np->name, proc->name, sizeof(proc->name));
 
   return pid;
 }
@@ -619,6 +620,8 @@ uint get_fifo_va(void) {
 
     va = proc->mempage_addr[proc->next_to_swap];
     proc->mempage_addr[proc->next_to_swap] = UNUSED_VA;
+    K_DEBUG_PRINT(2,"+++=mempage_addr[proc->next_to_swap] = %x (should be UNUSED_VA)",
+                  proc->mempage_addr[proc->next_to_swap]);
     proc->next_to_swap++;
     proc->next_to_swap %= MAX_PSYC_PAGES;
     return va;
@@ -693,7 +696,8 @@ int add_page_va(uint va) {
         panic("memory full trying to add to mempage_addr\n");
 
     proc->mempage_addr[i] = va;
-    proc->nfu_arr[i] = 0;
+    K_DEBUG_PRINT(2, "+++=proc->mempage_addr[%d] = %x", i, proc->mempage_addr[i]);
+    proc->nfu_arr[i] = (1 << 31); /* just used */
     return i;
 }
 
@@ -707,20 +711,26 @@ uint get_nfu_va() {
     int min_idx;
     uint va;
 
-
-
     for(i=0;i < MAX_PSYC_PAGES;i++) {
-        if (proc->mempage_addr[i] != UNUSED_VA)
-            break;
-    }
-    if (i == MAX_PSYC_PAGES){
-        for (i = 0; i < MAX_SWAP_PAGES; i++) {
-            K_DEBUG_PRINT(2, "PANIC: proc->mempage_addr[%d]=%x", i, proc->mempage_addr[i]);
+        if (proc->mempage_addr[i] == UNUSED_VA) { /* was != */
+            K_DEBUG_PRINT(2, "missing page on i=%d\n", i);
+            for (i=0; i < MAX_PSYC_PAGES; i++) {
+                K_DEBUG_PRINT(2, "proc->mempage_addr[%d] = %x",
+                              i, proc->mempage_addr[i]);
+            }
+                panic("get_nfu_va: memory has an unused slot");
+        /* break; */
         }
-        /* panic("get_nfu_va: empty address array"); */ /* A&T FIXME!! */
-        return 999;
     }
+    /* if (i == MAX_PSYC_PAGES){ */
+    /*     for (i = 0; i < MAX_SWAP_PAGES; i++) { */
+    /*         K_DEBUG_PRINT(2, "PANIC: proc->mempage_addr[%d]=%x", i, proc->mempage_addr[i]); */
+    /*     } */
+    /*     panic("get_nfu_va: empty address array"); /\* A&T FIXME!! *\/ */
+    /*     /\* return 999; *\/ */
+    /* } */
 
+    i = 0;
     min_idx = i;
     min_val = proc->nfu_arr[i];
     for(;i < MAX_PSYC_PAGES;i++) {
@@ -732,6 +742,8 @@ uint get_nfu_va() {
     }
     va = proc->mempage_addr[min_idx];
     proc->mempage_addr[min_idx] = UNUSED_VA;
+    K_DEBUG_PRINT(2, "+++=proc->mempage_addr[%d] = %x (should be UNUSED_VA)",
+                  min_idx, proc->mempage_addr[min_idx]);
     return va;
 
 }

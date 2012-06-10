@@ -215,4 +215,4 @@ int             map_swap_pages(pde_t*, void*, uint, int);
                                          __FILE__, __LINE__, __func__,	\
                                          __VA_ARGS__); } while (0)
 
-#define  T_A_DEBUG 2
+#define  T_A_DEBUG 0

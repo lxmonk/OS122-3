@@ -7,8 +7,6 @@
 #include "proc.h"
 #include "elf.h"
 
-
-
 #define MAX_PSYC_MEM (MAX_PSYC_PAGES * PGSIZE)
 
 extern char data[];  // defined by kernel.ld
@@ -253,7 +251,7 @@ allocuvm(pde_t *pgdir, uint oldsz, uint newsz)
   replacement_alg = A_NONE;
 #endif
 
-  K_DEBUG_PRINT(2, "replacement_alg=%d", replacement_alg);
+  K_DEBUG_PRINT(3, "replacement_alg=%d", replacement_alg);
   if(newsz >= KERNBASE)
     return 0;
   if(newsz < oldsz)
@@ -261,7 +259,7 @@ allocuvm(pde_t *pgdir, uint oldsz, uint newsz)
 
   a = PGROUNDUP(oldsz);
   for(; a < newsz; a += PGSIZE) {
-      K_DEBUG_PRINT(3,"a = %x, a/PGSIZE = %x",a,a/PGSIZE);
+      K_DEBUG_PRINT(1,"a = %x, a/PGSIZE = %x",a,a/PGSIZE);
       // A&T max pages in psyc memory
       //      if ((a >= MAX_PSYC_MEM))
       if ((replacement_alg != A_NONE) &&
@@ -278,8 +276,8 @@ allocuvm(pde_t *pgdir, uint oldsz, uint newsz)
       /* A&T  */
       if (replacement_alg != A_NONE) {
           add_page_va(PGROUNDDOWN(a));
-          inc_mapped_pages_number();
       }
+      inc_mapped_pages_number();
       /* A&T  end */
 
   }
@@ -449,6 +447,8 @@ int swap_from_file(uint va) {
     for (i = 0; i < MAX_SWAP_PAGES; i++) {
         if (pfile_va_arr[i] == va) {
             pfile_va_arr[i] = UNUSED_VA;
+            K_DEBUG_PRINT(2, "+++=pagefile_addr[%d] = %x (should be UNUSED_VA)",
+                          i, pfile_va_arr[i]);
             break;
         }
     }
@@ -457,13 +457,17 @@ int swap_from_file(uint va) {
         panic("swap_from_file: page not in swap"); /* A&T FIXME */
         /* return -1; */
 
+    pfile_va_arr = get_pagefile_addr();
+    if (pfile_va_arr[i] != UNUSED_VA)
+        panic("swap_from_file: change to pagefile_addr not persistent.");
+
     f = get_pagefile();
     set_f_offset(f, ((uint)i * PGSIZE));
 
     //allocate memort for page
     mem = kalloc();
     if(mem == 0){
-        panic(" can't swap from file'\n");
+        panic("can't swap from file'\n");
         return 0;
     }
     memset(mem, 0, PGSIZE);
@@ -523,7 +527,8 @@ int swap_to_file(pde_t *pgdir) {
     if (!((init_done) && (not_shell_init())))
         return -1;
     if (get_swapped_pages_number() >= MAX_SWAP_PAGES)
-        return -1;
+        panic("swap_to_file: too many pages used.");
+        /* return -1; */
     if ((va_page = page_to_swap(pgdir)) == UNUSED_VA)
         return -1;
 
@@ -536,13 +541,18 @@ int swap_to_file(pde_t *pgdir) {
         if (pagefile_addr[i] == UNUSED_VA) {
             //saves va address of swap page
             pagefile_addr[i] = va_page;
+            K_DEBUG_PRINT(2, "+++pagefile_addr[%d] = %x", i, pagefile_addr[i]);
             break;
         }
     }
 
     if (i == MAX_SWAP_PAGES)
         panic("swap_to_file: swap file is full");
-    // f = swap file
+
+    pagefile_addr = get_pagefile_addr();
+    if (pagefile_addr[i] != va_page)
+        panic("swap_to_file: change to pagefile_addr not persistent.");
+
     f = get_pagefile();
     set_f_offset(f, ((uint)i * PGSIZE));
     //writing page to swap file

@@ -1,7 +1,7 @@
 // Segments in proc->gdt.
 #define NSEGS     7
 #define MAX_SWAP_PAGES 15	/* A&T */
-#define MAX_PSYC_PAGES 15	/* A&T */
+#define MAX_PSYC_PAGES 15       /* A&T  */
 #define MAX_TOTAL_PAGES ((MAX_PSYC_PAGES) + (MAX_SWAP_PAGES)) /* A&T */
 #define UNUSED_VA 0xFFFFFFFF
 // Per-CPU state
